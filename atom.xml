@@ -1,0 +1,776 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title><![CDATA[pein0119's blog]]></title>
+  
+  <link href="/atom.xml" rel="self"/>
+  <link href="http://yoursite.com/"/>
+  <updated>2015-11-27T07:12:23.000Z</updated>
+  <id>http://yoursite.com/</id>
+  
+  <author>
+    <name><![CDATA[pein0119]]></name>
+    
+  </author>
+  
+  <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title><![CDATA[bash代码片段]]></title>
+    <link href="http://yoursite.com/2015/11/27/bash%E4%BB%A3%E7%A0%81%E7%89%87%E6%AE%B5/"/>
+    <id>http://yoursite.com/2015/11/27/bash代码片段/</id>
+    <published>2015-11-27T06:27:58.000Z</published>
+    <updated>2015-11-27T07:12:23.000Z</updated>
+    <content type="html"><![CDATA[<blockquote>
+<p>注：本文会持续更新</p>
+</blockquote>
+<a id="more"></a>
+<ul>
+<li>将字符串切分为数组</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">IFS=: <span class="built_in">read</span> -r <span class="operator">-a</span> config &lt;&lt;&lt; <span class="string">"<span class="variable">$d</span>"</span></span><br></pre></td></tr></table></figure>
+]]></content>
+    <summary type="html">
+    <![CDATA[<blockquote>
+<p>注：本文会持续更新</p>
+</blockquote>]]>
+    
+    </summary>
+    
+      <category term="bash" scheme="http://yoursite.com/tags/bash/"/>
+    
+      <category term="bash" scheme="http://yoursite.com/categories/bash/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[记一次'nginx 499'排查经历]]></title>
+    <link href="http://yoursite.com/2015/11/06/%E8%AE%B0%E4%B8%80%E6%AC%A1-nginx-499-%E6%8E%92%E6%9F%A5%E7%BB%8F%E5%8E%86/"/>
+    <id>http://yoursite.com/2015/11/06/记一次-nginx-499-排查经历/</id>
+    <published>2015-11-06T03:06:31.000Z</published>
+    <updated>2015-11-06T03:54:48.000Z</updated>
+    <content type="html"><![CDATA[<p>昨天商家客服报了一个问题，有商家返回订单无法下载。我测试了一下，当下载时间超过10秒时，连接被强行断开，并在页面抛出504。<br>查看nginx日志，发现对应的请求返回的错误码为”499”。</p>
+<a id="more"></a>
+<blockquote>
+<p>“499”是nginx自定义错误码，意思是“客户端主动关闭连接”，就是PHP脚本执行的时间太长了，调用方关闭了连接。</p>
+</blockquote>
+<p>解决过程：</p>
+<h3 id="1-_先确认是否是代码问题">1. 先确认是否是代码问题</h3><p>报499的一个可能原因就是，有人调小了curl请求的超时时间，curl超时之后调用方主动关闭了连接。</p>
+<ul>
+<li>我先是查看了所有与该业务相关的代码的”svn log”,确定最近一段时间没有对相关代码修改。</li>
+<li>然后我去预上线环境测试了一下，尝试多次后，都没有出现该问题，那就应该不是代码的问题。</li>
+</ul>
+<p>结论：代码问题被排除，有很大可能是线上环境问题。</p>
+<h3 id="2-_确认是否是环境问题">2. 确认是否是环境问题</h3><p>还是从日志着手</p>
+<ul>
+<li>取出了所有报“499”的php机器IP，不幸的是，所有机器都出现了这种问题，而且都是10s就断开连接。</li>
+<li>取出了所有报错的nginx机器的IP,好吧，也没发现规律。</li>
+</ul>
+<p>其实，到这里，我完全可以把这个问题交给sys那边了，因为已经确定不是我们这边代码的问题了。</p>
+<ul>
+<li>检查nginx配置文件相关参数，fastcgi_read_timeout参数设置的是60s，不会导致这个问题。</li>
+<li>检查php机器上的php.ini，虽然max_execution_time参数的值是10s，但是我在php的脚本里面使用set_time_limit函数临时将脚本的最长执行时间改为了600s，所以也不是这个问题。</li>
+<li>检查php-fpm.conf，request_terminate_timeout参数没有设置，那就是不会限制cgi接口读取数据的时间，php-fpm的问题也被排除了。</li>
+</ul>
+<p>到这里我已经开始怀疑人生了。</p>
+<h3 id="3-_纠结了3个小时之后，还是丢给sys解决">3. 纠结了3个小时之后，还是丢给sys解决</h3><p>负责我们组线上机器配置的sys也纠结了两个小时。<br>最后，终于找到了问题，最近为迎接大促，新上了流控系统，使用的是openresty。<br>前几天新系统上线的时候就出现了这类问题，但是openresty的配置被多人修改的很乱，有几个地方漏改了。他排查了所有的nginx机器，将</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">proxy_read_timeout <span class="number">10</span>s;</span><br><span class="line">proxy_send_timeout <span class="number">10</span>s;</span><br></pre></td></tr></table></figure>
+<p>改为<br><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">proxy_read_timeout <span class="number">60</span>s;</span><br><span class="line">proxy_send_timeout <span class="number">60</span>s;</span><br></pre></td></tr></table></figure></p>
+<p>然后重启openresty，问题解决了。</p>
+<h3 id="后记">后记</h3><p>╮(╯▽╰)╭，纠结死我了，以后这种问题确认不是我们这边代码的问题，直接丢给sys，浪费我这么长时间。</p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>昨天商家客服报了一个问题，有商家返回订单无法下载。我测试了一下，当下载时间超过10秒时，连接被强行断开，并在页面抛出504。<br>查看nginx日志，发现对应的请求返回的错误码为”499”。</p>]]>
+    
+    </summary>
+    
+      <category term="nginx" scheme="http://yoursite.com/tags/nginx/"/>
+    
+      <category term="php" scheme="http://yoursite.com/tags/php/"/>
+    
+      <category term="nginx" scheme="http://yoursite.com/categories/nginx/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[PHP删除字符串中的emoji表情]]></title>
+    <link href="http://yoursite.com/2015/09/20/PHP%E5%88%A0%E9%99%A4%E5%AD%97%E7%AC%A6%E4%B8%B2%E4%B8%AD%E7%9A%84emoji%E8%A1%A8%E6%83%85/"/>
+    <id>http://yoursite.com/2015/09/20/PHP删除字符串中的emoji表情/</id>
+    <published>2015-09-20T02:08:14.000Z</published>
+    <updated>2015-09-20T02:23:52.000Z</updated>
+    <content type="html"><![CDATA[<p>导引：单个emoji字符的长度为4个字节，而我们使用的MySQL数据的编码最长只支持3字节字符，所以插入emoji表情时会报错，最终的解决方案是将MySQL的编码修改为utf8mb4。</p>
+<a id="more"></a>
+<p>最近用户注册时喜欢在昵称中添加emoji表情，经常导致数据库插入查询失败。临时的解决方案是删除字符串中的emoji表情，代码如下：</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 过滤掉emoji表情</span></span><br><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">filterEmoji</span><span class="params">(<span class="variable">$str</span>)</span></span><br><span class="line"></span>&#123;</span><br><span class="line">    <span class="variable">$str</span> = preg_replace_callback(</span><br><span class="line">	        <span class="string">'/./u'</span>,</span><br><span class="line">            <span class="function"><span class="keyword">function</span> <span class="params">(array <span class="variable">$match</span>)</span> </span>&#123;</span><br><span class="line">                <span class="keyword">return</span> strlen(<span class="variable">$match</span>[<span class="number">0</span>]) &gt;= <span class="number">4</span> ? <span class="string">''</span> : <span class="variable">$match</span>[<span class="number">0</span>];</span><br><span class="line">            &#125;,</span><br><span class="line">            <span class="variable">$str</span>);</span><br><span class="line"></span><br><span class="line">     <span class="keyword">return</span> <span class="variable">$str</span>;</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+<p>基本思想就是遍历字符串中的每个字符，如果该字符的长度为4个字节，就将其删除。</p>
+<p>（完）</p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>导引：单个emoji字符的长度为4个字节，而我们使用的MySQL数据的编码最长只支持3字节字符，所以插入emoji表情时会报错，最终的解决方案是将MySQL的编码修改为utf8mb4。</p>]]>
+    
+    </summary>
+    
+      <category term="emoji" scheme="http://yoursite.com/tags/emoji/"/>
+    
+      <category term="php" scheme="http://yoursite.com/tags/php/"/>
+    
+      <category term="php" scheme="http://yoursite.com/categories/php/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[PHP调试小技巧]]></title>
+    <link href="http://yoursite.com/2015/06/20/PHP%E8%B0%83%E8%AF%95%E5%B0%8F%E6%8A%80%E5%B7%A7/"/>
+    <id>http://yoursite.com/2015/06/20/PHP调试小技巧/</id>
+    <published>2015-06-20T02:19:23.000Z</published>
+    <updated>2015-06-20T02:32:27.000Z</updated>
+    <content type="html"><![CDATA[<p>在开发机环境只能只能使用VIM和Emacs（我用的是Emacs），调试PHP没有什么比较的工具，下面是我常用的一个函数:  </p>
+<a id="more"></a>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">file_put_contents(<span class="string">'/tmp/my.log'</span>, print_r(<span class="keyword">array</span>(date(<span class="string">'Y-m-d H:i:s'</span>), <span class="keyword">__LINE__</span>, <span class="keyword">__METHOD__</span>, ), <span class="keyword">TRUE</span>), FILE_APPEND | LOCK_EX);</span><br></pre></td></tr></table></figure>
+<p>该函数可以向<code>/tmp/my.log</code>文件输出一条日志，包括函数执行的日期、在哪一行执行、由哪个方法执行, 在<code>__METHOD__</code>之后可以加上我们想打印的变量，比如<code>$a</code>，然后就像下面这样：</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">file_put_contents(<span class="string">'/tmp/my.log'</span>, print_r(<span class="keyword">array</span>(date(<span class="string">'Y-m-d H:i:s'</span>), <span class="keyword">__LINE__</span>, <span class="keyword">__METHOD__</span>, <span class="variable">$a</span>), <span class="keyword">TRUE</span>), FILE_APPEND | LOCK_EX);</span><br></pre></td></tr></table></figure>
+<p>然后我们重新运行代码，同时新开一个窗口，监视日志变化：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ tailf /tmp/my.log</span><br></pre></td></tr></table></figure>
+<p>这样我们就可以打印出<code>$a</code>变量了。</p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>在开发机环境只能只能使用VIM和Emacs（我用的是Emacs），调试PHP没有什么比较的工具，下面是我常用的一个函数:  </p>]]>
+    
+    </summary>
+    
+      <category term="php" scheme="http://yoursite.com/tags/php/"/>
+    
+      <category term="php" scheme="http://yoursite.com/categories/php/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[其实我在胡说八道]]></title>
+    <link href="http://yoursite.com/2015/05/27/%E5%88%86%E9%94%80%E9%A1%B9%E7%9B%AE%E6%80%BB%E7%BB%93/"/>
+    <id>http://yoursite.com/2015/05/27/分销项目总结/</id>
+    <published>2015-05-27T12:35:59.000Z</published>
+    <updated>2015-05-27T12:57:48.000Z</updated>
+    <content type="html"><![CDATA[<p>好久没写博客了（虽然我的博客估计没人看）。。。</p>
+<a id="more"></a>
+<p>上次博客更新是4月10号，咦！！！！一个多月没写博客了呢。<br>最近一个月发生了好多的事情。</p>
+<p>第一件事，我搬家了，4月25号搬的家，离开了在北京的第一个住所，心里还是很舍不得的。突然发现，自己开始很恋旧，总是在想以前的事情，想着这一年自己都做了什么。╮(╯▽╰)╭，一年过得好快啊。想念自己每周都会去的菜市场已经经常去得电影院，住在宝盛里的时候，感觉那个地方好破啊，跟想象中的北京完全是两个样子，现在搬走了，觉得那里生活还是挺方便的。小区门口就是公交车始发站，还有电影院、菜市场，附近还有个公园。看来人只有失去的时候才懂得珍惜。再就是特别想念住在一起将近一年的室友，一个个的搬走，最后我也搬走了。以前觉得屋里人好多啊，现在才知道，原来我根本不能承受一个人得生活，好吧，好感伤啊。有个人，可能我这辈子都不会见到了，最后说一次，很抱歉，我也不知道为什么最后会变成这个样子，很对不起。</p>
+<p>第二件事，最近在忙一个“分销”项目，虽然觉得这个项目优点不靠谱，但是，还得硬着头皮做啊。抱怨归抱怨，总得想办法把事情做好。在这个项目中遇到了很多的坑，一个个的解决，有的时候，觉得自己实在没有办法了，可是第二天还得硬着头皮上。这个项目让我觉得，其实我也不过如此，还得抓紧学好本事啊。总觉自己优点急功近利，急于求成，其实，有时候觉得完全没有必要，做给谁看呀？！还是要脚踏实地，走好每一步。<strong>一定要注意SQL的性能问题，千万要注意，大数据量时，SQL性能影响很明显</strong>。</p>
+<p>最后，<strong>那些没击垮你的，终将使你变得更加强大！！</strong></p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>好久没写博客了（虽然我的博客估计没人看）。。。</p>]]>
+    
+    </summary>
+    
+      <category term="other" scheme="http://yoursite.com/tags/other/"/>
+    
+      <category term="other" scheme="http://yoursite.com/categories/other/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[js获取url参数的值]]></title>
+    <link href="http://yoursite.com/2015/04/10/js%E8%8E%B7%E5%8F%96url%E5%8F%82%E6%95%B0%E7%9A%84%E5%80%BC/"/>
+    <id>http://yoursite.com/2015/04/10/js获取url参数的值/</id>
+    <published>2015-04-10T02:55:08.000Z</published>
+    <updated>2015-04-10T03:27:20.000Z</updated>
+    <content type="html"><![CDATA[<p>一个小函数，用来获取当前url中的参数的值</p>
+<a id="more"></a>
+<figure class="highlight javascript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">function</span> <span class="title">getUrlParam</span>(<span class="params">param</span>) </span>&#123;</span><br><span class="line">  <span class="keyword">var</span> urlParam = <span class="built_in">window</span>.location.search.substring(<span class="number">1</span>).split(<span class="string">'&amp;'</span>)</span><br><span class="line"></span><br><span class="line">  <span class="keyword">var</span> len = urlParam.length;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">var</span> i = <span class="number">0</span>; i &lt; len; i++) &#123;</span><br><span class="line">	<span class="keyword">if</span> (param === urlParam[i].split(<span class="string">'='</span>)[<span class="number">0</span>]) &#123;</span><br><span class="line">	  <span class="keyword">return</span> urlParam[i].split(<span class="string">'='</span>)[<span class="number">1</span>];</span><br><span class="line">	&#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>一个小函数，用来获取当前url中的参数的值</p>]]>
+    
+    </summary>
+    
+      <category term="js" scheme="http://yoursite.com/tags/js/"/>
+    
+      <category term="js" scheme="http://yoursite.com/categories/js/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[MySQL服务器启动错误 'The server quit without updating PID file']]></title>
+    <link href="http://yoursite.com/2015/03/25/MySQL%E6%9C%8D%E5%8A%A1%E5%99%A8%E5%90%AF%E5%8A%A8%E9%94%99%E8%AF%AF-The-server-quit-without-updating-PID-file/"/>
+    <id>http://yoursite.com/2015/03/25/MySQL服务器启动错误-The-server-quit-without-updating-PID-file/</id>
+    <published>2015-03-25T12:26:56.000Z</published>
+    <updated>2015-03-25T13:03:32.000Z</updated>
+    <content type="html"><![CDATA[<p>本文翻译自<a href="http://stackoverflow.com/questions/4963171/mysql-server-startup-error-the-server-quit-without-updating-pid-file" target="_blank" rel="external">链接</a>。</p>
+<a id="more"></a>
+<h3 id="答案一">答案一</h3><p>你遵循<code>brew install mysql</code>的说明了吗？<br>用<strong>用户账户</strong>来执行以下命令：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">unset TMPDIR&#10;mysql_install_db --verbose --user=`whoami` --basedir=&#34;$(brew --prefix mysql)&#34; --datadir=/usr/local/var/mysql --tmpdir=/tmp</span><br></pre></td></tr></table></figure>
+<p>若想在另一个文件夹中建立基础表，或者使用了不同的用户运行了mysqld，请查看<code>mysql_install_db</code>的帮助文档：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mysql_install_db --help</span><br></pre></td></tr></table></figure>
+<p>或者查看MySQL官方文档：</p>
+<ul>
+<li><a href="http://dev.mysql.com/doc/refman/5.5/en/mysql-install-db.html" target="_blank" rel="external">http://dev.mysql.com/doc/refman/5.5/en/mysql-install-db.html</a></li>
+<li><a href="http://dev.mysql.com/doc/refman/5.5/en/default-privileges.html" target="_blank" rel="external">http://dev.mysql.com/doc/refman/5.5/en/default-privileges.html</a></li>
+</ul>
+<p>比如说你想使用’mysql’作为用户，你需要运行<code>sudo</code>命令：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo mysql_install_db ...options...</span><br></pre></td></tr></table></figure>
+<p>然后手动启动mysqld:</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">mysql.server start</span><br></pre></td></tr></table></figure>
+<p><strong>注意：</strong>如果该操作失败的话，你可能是忘记运行前两步操作</p>
+<h3 id="答案二">答案二</h3><p>尝试找到后缀名为”.err”的log文件，这里记录了更详细的信息。它可能位于：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">/usr/local/var/mysql/your_computer_name.local.err</span><br></pre></td></tr></table></figure>
+<p>或许是由于权限问题：</p>
+<ol>
+<li>检查是否有mysql实例正在运行：</li>
+</ol>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ps -ef | grep mysql</span><br></pre></td></tr></table></figure>
+<p>如果是的话，你应该关掉它，或者直接杀掉进程：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">kill -9 PID</span><br></pre></td></tr></table></figure>
+<p>其中<code>PID</code>是第一个命令输出的靠近用户名的那个数字（进程ID）</p>
+<ol>
+<li>检查 <code>/usr/local/var/mysql/</code>的所有者：</li>
+</ol>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ls -laF /usr/local/var/mysql/</span><br></pre></td></tr></table></figure>
+<p>如果它的所有者是<code>root</code>的话，你应该把它改成<code>mysql</code>或者<code>你的用户名</code>：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo chown -R mysql /usr/local/var/mysql/</span><br></pre></td></tr></table></figure>
+<h3 id="答案三">答案三</h3><p><strong>译者注：</strong>我是使用该方法解决的。</p>
+<p>我在我的Mac上存在同样的问题(我是严格按照<code>brew install</code>的说明来安装的)</p>
+<p>删掉下面这个错误文件解决了我的问题：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo rm -rf /usr/local/var/mysql/dev.work.err (dev.work is my hostname)</span><br></pre></td></tr></table></figure>
+<p>这个对我起作用是由于<code>dev.work.err</code>是属于<code>_mysql:wheel</code>的，而不是我自己的用户名.更改“错误文件”的所有者可能也会起作用。</p>
+<h3 id="答案四">答案四</h3><p>检查所有正在运行的MySQL进程：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ ps aux | grep mysql&#10;&#10;USER     PID    %CPU  %MEM &#10;_mysql   5970   0.0   0.4 ...</span><br></pre></td></tr></table></figure>
+<p>使用下面的命令杀死所有的进程：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ sudo kill -9 [PID]</span><br></pre></td></tr></table></figure>
+<p>使用第一条命令获得的PID来代替<code>[PID]</code>，比如说：<code>5970</code></p>
+<p>然后重启MySQL服务器：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ mysql.server start</span><br></pre></td></tr></table></figure>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>本文翻译自<a href="http://stackoverflow.com/questions/4963171/mysql-server-startup-error-the-server-quit-without-updating-pid-file">链接</a>。</p>]]>
+    
+    </summary>
+    
+      <category term="mysql" scheme="http://yoursite.com/tags/mysql/"/>
+    
+      <category term="mysql" scheme="http://yoursite.com/categories/mysql/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[MySQL删除所有数据库]]></title>
+    <link href="http://yoursite.com/2015/03/18/MySQL%E5%88%A0%E9%99%A4%E6%89%80%E6%9C%89%E6%95%B0%E6%8D%AE%E5%BA%93/"/>
+    <id>http://yoursite.com/2015/03/18/MySQL删除所有数据库/</id>
+    <published>2015-03-18T12:39:36.000Z</published>
+    <updated>2015-03-18T12:56:03.000Z</updated>
+    <content type="html"><![CDATA[<p>今天在装Phabricator的时候出了些问题，需要删掉所有的数据库然后重新安装。由于数据库太多，一个一个删得话太麻烦，因此就有了这篇博文。</p>
+<a id="more"></a>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ mysql -uroot -p  -e &#34;show databases&#34; | grep -v mysql | grep -v information_schema | grep -v performance_schema | grep -v test |gawk &#39;&#123;print &#34;drop database &#34; $1 &#34;;select sleep(0.1);&#34;&#125;&#39; &#62; drop.sql</span><br></pre></td></tr></table></figure>
+<p>基本工作流程如下：</p>
+<ul>
+<li>连接数据库，显示所有的数据库名</li>
+<li>过滤掉mysql、information_schema、performance_schema、test这个几个默认的库</li>
+<li>使用gawk在每个数据库名进行drop操作</li>
+<li>将结果导入drop.sql</li>
+</ul>
+<p>最后，就可以使用</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ mysql -u root -p &#60; ./drop.sql</span><br></pre></td></tr></table></figure>
+<p>这种方式来执行drop.sql</p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>今天在装Phabricator的时候出了些问题，需要删掉所有的数据库然后重新安装。由于数据库太多，一个一个删得话太麻烦，因此就有了这篇博文。</p>]]>
+    
+    </summary>
+    
+      <category term="mysql" scheme="http://yoursite.com/tags/mysql/"/>
+    
+      <category term="mysql" scheme="http://yoursite.com/categories/mysql/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[PHP中标量类型'隐式转换']]></title>
+    <link href="http://yoursite.com/2015/02/10/PHP%E4%B8%AD%E6%A0%87%E9%87%8F%E7%B1%BB%E5%9E%8B-%E9%9A%90%E5%BC%8F%E8%BD%AC%E6%8D%A2/"/>
+    <id>http://yoursite.com/2015/02/10/PHP中标量类型-隐式转换/</id>
+    <published>2015-02-10T09:43:01.000Z</published>
+    <updated>2015-02-10T12:01:57.000Z</updated>
+    <content type="html"><![CDATA[<p>翻译自 <a href="http://codelegance.com/embracing-coercion-in-php/" target="_blank" rel="external">链接</a> </p>
+<p>Coercion是对<a href="http://php.net/manual/zh/language.types.intro.php" target="_blank" rel="external">标量类型</a> (整型、浮点型、布尔型、字符串类型)。在这篇文章中，我们会看到<a href="http://php.net/manual/zh/language.types.type-juggling.php#language.types.typecasting" target="_blank" rel="external">显式类型转换</a>的一种优雅的替代方式。</p>
+<a id="more"></a>
+<h2 id="转换为整型">转换为整型</h2><p>我们可以在任何表达式之后添加 <code>|0</code> 后缀 – 位运算中的<code>按位或</code>运算，将其转化为整型。<a href="http://php.net/manual/zh/language.operators.bitwise.php" target="_blank" rel="external">位运算操作符</a> 只对整型有效，所以PHP会讲两个操作数都转换为整型。并且，与0值进行<code>按位或</code>运算对操作数的数值无影响，所以，我们可以放心使用这一技巧。</p>
+<p>这种转换与 <code>(int)floor($x)</code> , <code>intval($x)</code>, <code>(int)$x</code>, <code>(integer)$x</code>等方式是相同的。在其它的一些语言中，也可以通过使用 <code>~~</code> (两个<code>非</code>操作)前缀来实现。</p>
+<h3 id="例子">例子</h3><figure class="highlight 1c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">表达式     结果 </span><br><span class="line">	</span><br><span class="line">true<span class="string">|0    1 </span></span><br><span class="line">false<span class="string">|0   0 </span></span><br><span class="line"><span class="number">1.6</span><span class="string">|0     1 </span></span><br><span class="line">'<span class="number">1</span>a'<span class="string">|0    1 </span></span><br><span class="line">'a1'<span class="string">|0    0</span></span><br></pre></td></tr></table></figure>
+<h2 id="转换为浮点型">转换为浮点型</h2><p>我们可以在任何表达式之后添加 <code>+0.</code> 或 <code>+.0</code>后缀来将其转换为浮点型。<a href="http://php.net/manual/zh/language.types.float.php" target="_blank" rel="external">浮点数</a>可以没有整数部分或小数部分（但不能两部分都没有），这种情况下未指定的部分会被认为是0；所以，<code>0.</code>和<code>.0</code>与<code>0.0</code>是一样的。</p>
+<p>这种转换与 <code>flloat($x)</code>, <code>doubleval($x)</code>, <code>(float)$x</code>, <code>(double)$x</code>, <code>(real)$x</code>是一样的。</p>
+<h3 id="例子-1">例子</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">表达式    结果</span><br><span class="line"></span><br><span class="line"><span class="literal">true</span>+<span class="number">0.</span>  <span class="number">1.0</span></span><br><span class="line"><span class="literal">false</span>+<span class="number">0.</span> <span class="number">0.0</span></span><br><span class="line"><span class="string">'1'</span>+<span class="number">0.</span>   <span class="number">1.0</span></span><br></pre></td></tr></table></figure>
+<h2 id="转换为数值类型">转换为数值类型</h2><p>我们可以在任何表达式转换为<a href="http://php.net/manual/zh/language.pseudo-types.php" target="_blank" rel="external">数值类型</a>；也就是，在一个整数或浮点数之前添加前缀，<code>+</code> 或 <code>-</code>。尽管它们在算数<a href="http://php.net/manual/zh/language.operators.arithmetic.php" target="_blank" rel="external">运算符</a>中一般被当做加号和减号，但当只有一个操作数时，我们称他们为<a href="http://en.wikipedia.org/wiki/Unary_operation" target="_blank" rel="external">一元</a>加和减。<code>+</code>将它的操作数转换为整型或浮点型，依据的是该操作数与哪一类型更接近；<code>-</code>也会进行相同的操作，不过，它同时会将操作数取反。</p>
+<h3 id="例子-2">例子</h3><figure class="highlight actionscript"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">表达式        结果</span><br><span class="line"></span><br><span class="line">+<span class="literal">true</span>        <span class="number">1</span></span><br><span class="line">-<span class="literal">true</span>        -<span class="number">1</span></span><br><span class="line">-<span class="literal">false</span>       <span class="number">0</span></span><br><span class="line">-<span class="string">'-1.6a'</span>     <span class="number">1.6</span></span><br><span class="line">+(<span class="string">'1'</span>.<span class="string">'6'</span>)   <span class="number">16</span></span><br><span class="line">+<span class="string">'0x10'</span>      <span class="number">16</span></span><br><span class="line">+<span class="string">'010'</span>       <span class="number">10</span></span><br><span class="line">+<span class="string">'0b10'</span>      <span class="number">0</span></span><br></pre></td></tr></table></figure>
+<h2 id="转换为布尔型">转换为布尔型</h2><p>我们可以将任何表达式转换为布尔型，只需要加一个<code>!</code>(逻辑<code>非</code>运算符)前缀。<a href="http://php.net/manual/zh/language.operators.logical.php" target="_blank" rel="external">逻辑运算符</a>总是返回布尔值。我们使用<code>!</code>，是因为它是一元运算符，很简洁。使用<code>!!</code>可以保证原表达式的布尔值不变。</p>
+<p>布尔转换与<code>boolval($x)</code>, <code>(bool)$x</code>, <code>(boolean)$x</code>是一样的。</p>
+<h3 id="例子-3">例子</h3><figure class="highlight erlang-repl"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">表达式   结果</span><br><span class="line"></span><br><span class="line"><span class="exclamation_mark">!</span><span class="exclamation_mark">!</span><span class="function_or_atom">true</span>  <span class="function_or_atom">true</span></span><br><span class="line"><span class="exclamation_mark">!</span><span class="number">0</span>      <span class="function_or_atom">true</span></span><br><span class="line"><span class="exclamation_mark">!</span><span class="exclamation_mark">!</span><span class="number">1</span>     <span class="function_or_atom">true</span></span><br><span class="line"><span class="exclamation_mark">!</span><span class="exclamation_mark">!</span><span class="string">'a'</span>   <span class="function_or_atom">true</span></span><br><span class="line"><span class="exclamation_mark">!</span><span class="exclamation_mark">!</span><span class="string">'0'</span>   <span class="function_or_atom">false</span></span><br></pre></td></tr></table></figure>
+<p>更多的转换结果请查看<a href="http://php.net/manual/zh/types.comparisons.php#types.comparisions-loose" target="_blank" rel="external">真值表</a>。</p>
+<h2 id="转换为字符串类型">转换为字符串类型</h2><p>我们可以将任何标量或对象用双引号引起来，来将其转换为字符串类型。</p>
+<p>这种转换与 <code>strval($x)</code>，<code>(string)$x</code>是一样的。</p>
+<h3 id="例子-4">例子</h3><p><a href="http://php.net/manual/zh/class.exception.php" target="_blank" rel="external">Exception</a>中实现了<code>__toString</code>方法提供异常的字符串表示。</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">$e</span> = <span class="keyword">new</span> <span class="keyword">Exception</span>(<span class="string">'foo'</span>);</span><br><span class="line"><span class="string">"$e"</span>;</span><br></pre></td></tr></table></figure>
+<p>结果</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ exception &#39;Exception&#39; with message &#39;foo&#39; in -:2 &#10;  Stack trace: &#10;  #0 &#123;main&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="实际应用">实际应用</h2><p>一些人<a href="https://github.com/eloquent/typhax" target="_blank" rel="external">尝试</a>为语言提供强类型，但使用语言的上述特性，我们可以很方便的将变量转换为我们想要的类型。</p>
+<h3 id="例子-5">例子</h3><p>当我们创建getter和setter时，这种转换很有用。在下面的例子中，我们可以保证使用<code>setInteger</code>方法存储的变量都是整数类型。</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Bar</span> </span>&#123;  </span><br><span class="line">    <span class="keyword">private</span> <span class="variable">$integer</span>;</span><br><span class="line"></span><br><span class="line">     <span class="keyword">public</span> <span class="function"><span class="keyword">function</span> <span class="title">setInteger</span><span class="params">(<span class="variable">$integer</span>)</span> </span>&#123;</span><br><span class="line">         <span class="variable">$this</span>-&gt;integer = <span class="variable">$integer</span>|<span class="number">0</span>;</span><br><span class="line">     &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="ToString的例子">ToString的例子</h3><p>我们可以在类中实现<code>__toString</code>方法，这样可以避免PHP抛出致命错误。此时，我们就可以使用上面提到的方法来解决这个问题。</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Foo</span> </span>&#123;  </span><br><span class="line">    <span class="keyword">public</span> <span class="variable">$value</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="function"><span class="keyword">function</span> <span class="title">__toString</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="string">"$this-&gt;value"</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="variable">$foo</span> = <span class="keyword">new</span> Foo;</span><br><span class="line"><span class="variable">$foo</span>-&gt;value = <span class="number">123</span>;</span><br><span class="line"><span class="string">"$foo"</span></span><br></pre></td></tr></table></figure>
+<p>结果：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ &#39;123&#39;</span><br></pre></td></tr></table></figure>
+<h2 id="总结">总结</h2><figure class="highlight xquery"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">类型      方式</span><br><span class="line"></span><br><span class="line">整型      <span class="variable">$x</span>|<span class="number">0</span></span><br><span class="line">浮点型    <span class="variable">$x</span>+<span class="number">0</span>. 或 <span class="variable">$x</span>+.<span class="number">0</span></span><br><span class="line">数值类型  +<span class="variable">$x</span> 或 -<span class="variable">$x</span></span><br><span class="line">布尔值    !!<span class="variable">$x</span> 或 !<span class="variable">$x</span></span><br><span class="line">字符串    <span class="string">"$x"</span></span><br></pre></td></tr></table></figure>
+<h2 id="结论">结论</h2><p>我们可以看到上面的方式可以很<strong>简短</strong>的将表达式转换为我们需要的类型。我们也可以将PHP中的这种转换方式应用到其他语言中来改变表达式的类型。</p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>翻译自 <a href="http://codelegance.com/embracing-coercion-in-php/">链接</a> </p>
+<p>Coercion是对<a href="http://php.net/manual/zh/language.types.intro.php">标量类型</a> (整型、浮点型、布尔型、字符串类型)。在这篇文章中，我们会看到<a href="http://php.net/manual/zh/language.types.type-juggling.php#language.types.typecasting">显式类型转换</a>的一种优雅的替代方式。</p>]]>
+    
+    </summary>
+    
+      <category term="php" scheme="http://yoursite.com/tags/php/"/>
+    
+      <category term="php" scheme="http://yoursite.com/categories/php/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[浏览器禁用cookie后如何使用session]]></title>
+    <link href="http://yoursite.com/2015/02/03/%E6%B5%8F%E8%A7%88%E5%99%A8%E7%A6%81%E7%94%A8cookie%E5%90%8E%E5%A6%82%E4%BD%95%E4%BD%BF%E7%94%A8session/"/>
+    <id>http://yoursite.com/2015/02/03/浏览器禁用cookie后如何使用session/</id>
+    <published>2015-02-03T10:34:45.000Z</published>
+    <updated>2015-02-03T17:05:03.000Z</updated>
+    <content type="html"><![CDATA[<p>当你打开一个网站，浏览网站的内容，向网站提交一些数据，然后关闭了这个网站，这就是一次session。你自己的电脑知道你何时打开和关闭这个网站，但是，由于HTTP协议是无状态的，网站并不知道你是谁、你做了什么。  </p>
+<a id="more"></a>
+<p>session变量就是来解决这个问题的。在session变量中存储了用户的一些信息（用户名、刚才执行的动作等等），当用户从一个网页跳转到另一个网页时，网站就可以通过这些信息来获知当前是哪一用户做了哪些事情。  </p>
+<p>为了实现这机制，网站在用户的浏览器中存储了一个session cookie，该cookie的名称默认为<code>PHPSESSID</code>，在我的电脑上是这样的：</p>
+<p><img src="https://github.com/pein0119/pein0119.github.io/blob/master/image/15-02-04-4.png?raw=true" alt=""> </p>
+<p><code>PHPSESSID</code>中存储的值为当前session的id，通过该id，网站可以获取当前用户的session。</p>
+<p>这些选项都是在php.ini中设置的：</p>
+<figure class="highlight stylus"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">session<span class="class">.use_cookies</span> = <span class="number">1</span></span><br><span class="line">session<span class="class">.use_only_cookies</span> = <span class="number">1</span></span><br><span class="line">session<span class="class">.name</span> = PHPSESSID</span><br><span class="line">session<span class="class">.cookie_lifetime</span> = <span class="number">0</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>第一条配置是设置session使用cookie(session cookie)来存储session id。</li>
+<li>第二条配置是设置session只使用session cookie来存储session id。</li>
+<li>第三条配置是设置session cookie的名称为<code>PHPSESSID</code>。</li>
+<li>第四条配置是设置seesion cookie的生存周期，默认情况下，浏览器一旦关闭，session就会被销毁。</li>
+</ul>
+<blockquote>
+<p>注：<br>PHP的session只在用户的本地session cookie中存储了session id。与persistent cookie<br>将数据存储在用户端不同, session的数据主要是存储在服务端，所以session的数据对用户<br>不可见，用户可以直接修改本地的persistent cookie。从这个角度看，session比persistent cookie<br>要安全一些。所以，如果如果你的数据只需要在当前会话中使用，建议使用session机制。</p>
+</blockquote>
+<p>如果用户完全禁用cookie，服务端就无法在用户本地保存session id，我们需要一种变通的方法来实现session机制。</p>
+<p>测试代码如下：</p>
+<figure class="highlight php"><figcaption><span>index.php</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="preprocessor">&lt;?php</span></span><br><span class="line"></span><br><span class="line">ini_set(<span class="string">"session.use_cookies"</span>, <span class="number">0</span>);</span><br><span class="line">ini_set(<span class="string">"session.use_only_cookies"</span>, <span class="number">0</span>);</span><br><span class="line">ini_set(<span class="string">"session.use_trans_sid"</span>, <span class="number">1</span>); </span><br><span class="line"></span><br><span class="line">session_start();</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (!<span class="keyword">empty</span>(<span class="variable">$_REQUEST</span>[<span class="string">'firstname'</span>]) &amp;&amp; !<span class="keyword">empty</span>(<span class="variable">$_REQUEST</span>[<span class="string">'lastname'</span>])) &#123;</span><br><span class="line">    <span class="variable">$_SESSION</span>[<span class="string">'firstname'</span>] = <span class="variable">$_REQUEST</span>[<span class="string">'firstname'</span>];</span><br><span class="line">    <span class="variable">$_SESSION</span>[<span class="string">'lastname'</span>] = <span class="variable">$_REQUEST</span>[<span class="string">'lastname'</span>];</span><br><span class="line">&#125;</span><br><span class="line">	</span><br><span class="line"><span class="keyword">echo</span> session_id() . <span class="string">"&lt;br&gt;"</span>;</span><br><span class="line">var_dump(<span class="variable">$_SESSION</span>); <span class="keyword">echo</span> <span class="string">"&lt;br&gt;"</span>;</span><br><span class="line"><span class="preprocessor">?&gt;</span></span><br><span class="line"></span><br><span class="line">&lt;!DOCTYPE html&gt;</span><br><span class="line">&lt;html&gt;</span><br><span class="line">&lt;body&gt;</span><br><span class="line">&lt;form action=<span class="string">"/"</span>&gt;</span><br><span class="line">First name:&lt;br&gt;</span><br><span class="line">&lt;input type=<span class="string">"text"</span> name=<span class="string">"firstname"</span> &gt;&lt;br&gt;</span><br><span class="line">Last name:&lt;br&gt;</span><br><span class="line">&lt;input type=<span class="string">"text"</span> name=<span class="string">"lastname"</span> &gt;&lt;br&gt;</span><br><span class="line">&lt;input type=<span class="string">"submit"</span> value=<span class="string">"Submit"</span>&gt;</span><br><span class="line">&lt;/form&gt; </span><br><span class="line">&lt;/body&gt;</span><br><span class="line">&lt;/html&gt;</span><br></pre></td></tr></table></figure>
+<p>我使用<code>ini_set</code>这一方法来配置php的一些选项，前两条是禁用cookie，这样服务端就不能使用默认的方式来实现session机制。在第三条中，当<code>session.use_trans_sid</code>选项设置为1时，如果我们向服务端传送数据，就会在URL后自动加上当前的session id参数。就像这样：</p>
+<p><img src="https://github.com/pein0119/pein0119.github.io/blob/master/image/15-02-04-1.png?raw=true" alt=""> </p>
+<p>第一次提交之后，我将客户端发来的数据存储到session中，并打印<code>$_SESSION</code>变量。如下：</p>
+<p><img src="https://github.com/pein0119/pein0119.github.io/blob/master/image/15-02-04-2.png?raw=true" alt=""> </p>
+<p>当我们再次提交按钮，得到如下的结果：</p>
+<p><img src="https://github.com/pein0119/pein0119.github.io/blob/master/image/15-02-04-3.png?raw=true" alt=""> </p>
+<p>于是，通过每次将session id以url参数的形式传给后端，我们实现了无cookie情况下得session机制。</p>
+<p>不过，由于这种方式将session id以参数形式传送，所以，有可能造成会话劫持。建议还是尽量还是使用默认的session cookie机制来存储session id。</p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>当你打开一个网站，浏览网站的内容，向网站提交一些数据，然后关闭了这个网站，这就是一次session。你自己的电脑知道你何时打开和关闭这个网站，但是，由于HTTP协议是无状态的，网站并不知道你是谁、你做了什么。  </p>]]>
+    
+    </summary>
+    
+      <category term="cookie" scheme="http://yoursite.com/tags/cookie/"/>
+    
+      <category term="php" scheme="http://yoursite.com/tags/php/"/>
+    
+      <category term="session" scheme="http://yoursite.com/tags/session/"/>
+    
+      <category term="php" scheme="http://yoursite.com/categories/php/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[PHP扩展开发简介]]></title>
+    <link href="http://yoursite.com/2014/12/28/PHP%E6%89%A9%E5%B1%95%E5%BC%80%E5%8F%91%E7%AE%80%E4%BB%8B/"/>
+    <id>http://yoursite.com/2014/12/28/PHP扩展开发简介/</id>
+    <published>2014-12-28T02:30:51.000Z</published>
+    <updated>2015-01-31T07:07:54.000Z</updated>
+    <content type="html"><![CDATA[<p>使用C来开发PHP扩展可以极大的提高运行率，但扩展的开发比较复杂、开发周期长，所以，个中利弊还是要自己权衡。<br>本文只是开发PHP扩展的一个简单示范，演示一下PHP扩展开发的一般流程，并不深入研究相关的API。</p>
+<a id="more"></a>
+<h2 id="第一步、获取源代码">第一步、获取源代码</h2><p>开发扩展我们首先需要一份与你所使用的PHP版本对应的PHP源代码，因为PHP的源代码中有我们所需要的扩展开发环境。</p>
+<p>在这里，我使用的是PHP-5.5.33的源代码。</p>
+<h2 id="第二步、生成扩展框架">第二步、生成扩展框架</h2><p>进入PHP源代码目录下的ext目录，该目录下有一个名为<code>ext_skel</code>的文件，我们需要用这个文件生成扩展框架。</p>
+<p><code>ext_skel</code>文件有以下选项<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">./ext_skel --extname=module [--proto=file] [--stubs=file] [--xml[=file]]</span><br><span class="line">[--skel=dir] [--full-xml] [--no-help]</span><br><span class="line"></span><br><span class="line">--extname=module   module is the name of your extension</span><br><span class="line">--proto=file       file contains prototypes of <span class="built_in">functions</span> to create</span><br><span class="line">--stubs=file       generate only <span class="keyword">function</span> stubs <span class="keyword">in</span> file</span><br><span class="line">--xml              generate xml documentation to be added to phpdoc-cvs</span><br><span class="line">--skel=dir         path to the skeleton directory</span><br><span class="line">--full-xml         generate xml documentation <span class="keyword">for</span> a self-contained extension</span><br><span class="line">(not yet implemented)</span><br><span class="line">--no-help          don<span class="string">'t try to be nice and create comments in the code</span><br><span class="line">and helper functions to test if the module compiled</span></span><br></pre></td></tr></table></figure></p>
+<p>我们要创建一个名为dump的函数，所以终端输入命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ ./ext_skel --extname=dump</span><br></pre></td></tr></table></figure>
+<p>此时，目录下生成了一个名为dump的目录，该目录就是我们的扩展开发环境，其结构如下：<br><figure class="highlight stylus"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">├── config<span class="class">.m4</span></span><br><span class="line">├── config<span class="class">.w32</span></span><br><span class="line">├── CREDITS</span><br><span class="line">├── dump<span class="class">.c</span></span><br><span class="line">├── dump<span class="class">.php</span></span><br><span class="line">├── EXPERIMENTAL</span><br><span class="line">├── php_dump<span class="class">.h</span></span><br><span class="line">└── tests</span><br><span class="line">    └── <span class="number">001</span>.phpt</span><br></pre></td></tr></table></figure></p>
+<h2 id="第三步、更改配置文件">第三步、更改配置文件</h2><p>先要修改config.m4文件，将以下三行前面的注释(dnl)去掉：</p>
+<figure class="highlight swift"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">dnl <span class="type">PHP_ARG_ENABLE</span>(<span class="built_in">dump</span>, whether to enable <span class="built_in">dump</span> support,</span><br><span class="line">dnl <span class="type">Make</span> sure that the comment <span class="keyword">is</span> aligned:</span><br><span class="line">dnl [  --enable-<span class="built_in">dump</span>           <span class="type">Enable</span> <span class="built_in">dump</span> support])</span><br></pre></td></tr></table></figure>
+<h2 id="第四步、添加函数声明">第四步、添加函数声明</h2><p>在php_dump.h的47行：</p>
+<figure class="highlight gherkin"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">PHP_FUNCTION(confirm_dump_compiled);	/<span class="keyword">*</span> For testing, remove later. <span class="keyword">*</span>/</span><br></pre></td></tr></table></figure>
+<p>添加一行我们自己的函数声明：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">PHP_FUNCTION(dump);</span><br></pre></td></tr></table></figure>
+<h2 id="第五步、实现相应功能">第五步、实现相应功能</h2><p>在dump.c的41行：<br><figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> zend_function_entry dump_functions[] = &#123;</span><br><span class="line">PHP_FE(confirm_dump_compiled,	<span class="literal">NULL</span>)		<span class="comment">/* For testing, remove later. */</span></span><br><span class="line">PHP_FE_END	<span class="comment">/* Must be the last line in dump_functions[] */</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure></p>
+<p>中添加一行，使其变为：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">const</span> zend_function_entry dump_functions[] = &#123;</span><br><span class="line">PHP_FE(confirm_dump_compiled,	<span class="literal">NULL</span>)		<span class="comment">/* For testing, remove later. */</span></span><br><span class="line">PHP_FE(dump, <span class="literal">NULL</span>)</span><br><span class="line">PHP_FE_END	<span class="comment">/* Must be the last line in dump_functions[] */</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>在dump.c文件的末尾添加PHP_FUNCTION(dump)函数的实现：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* 核心代码 */</span></span><br><span class="line">PHP_FUNCTION(dump)</span><br><span class="line">&#123;</span><br><span class="line">    zval *zv_ptr;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, <span class="string">"z"</span>, &amp;zv_ptr) == FAILURE) &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">switch</span> (Z_TYPE_P(zv_ptr)) &#123;</span><br><span class="line">    <span class="keyword">case</span> IS_NULL:</span><br><span class="line">        php_printf(<span class="string">"NULL: null\n"</span>);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> IS_BOOL:</span><br><span class="line">        <span class="keyword">if</span> (Z_BVAL_P(zv_ptr)) &#123;</span><br><span class="line">            php_printf(<span class="string">"BOOL: true\n"</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            php_printf(<span class="string">"BOOL: false\n"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> IS_LONG:</span><br><span class="line">        php_printf(<span class="string">"LONG: %ld\n"</span>, Z_LVAL_P(zv_ptr));</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> IS_DOUBLE:</span><br><span class="line">        php_printf(<span class="string">"DOUBLE: %g\n"</span>, Z_DVAL_P(zv_ptr));</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> IS_STRING:</span><br><span class="line">        php_printf(<span class="string">"STRING: value=\""</span>);</span><br><span class="line">        PHPWRITE(Z_STRVAL_P(zv_ptr), Z_STRLEN_P(zv_ptr));</span><br><span class="line">        php_printf(<span class="string">"\", length=%d\n"</span>, Z_STRLEN_P(zv_ptr));</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> IS_RESOURCE:</span><br><span class="line">        php_printf(<span class="string">"RESOURCE: id=%ld\n"</span>, Z_RESVAL_P(zv_ptr));</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> IS_ARRAY:</span><br><span class="line">        php_printf(<span class="string">"ARRAY: hashtable=%p\n"</span>, Z_ARRVAL_P(zv_ptr));</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    <span class="keyword">case</span> IS_OBJECT:</span><br><span class="line">        php_printf(<span class="string">"OBJECT: ???\n"</span>);</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="第六步、编译安装扩展">第六步、编译安装扩展</h2><p>在dump目录下运行:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ /path/to/phpize</span><br><span class="line">$ ./configure --with-php-config=/path/to/php-config</span><br><span class="line">$ sudo make &amp;&amp; sudo make install</span><br></pre></td></tr></table></figure>
+<p>phpize命令用来准备PHP扩展的编译环境, php-config指明了当前PHP环境的一些信息。</p>
+<h2 id="第七步、修改PHP-ini">第七步、修改PHP.ini</h2><p>在php.ini中添加<br><figure class="highlight fix"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attribute">extension</span>=<span class="string">dump.so</span></span><br></pre></td></tr></table></figure></p>
+<p>而后，重启php-fpm服务</p>
+<h2 id="第八步、测试">第八步、测试</h2><figure class="highlight php"><figcaption><span>test.php</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="preprocessor">&lt;?php</span></span><br><span class="line"></span><br><span class="line"><span class="variable">$arr</span> = <span class="keyword">array</span>(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>);</span><br><span class="line"><span class="keyword">echo</span> dump(<span class="variable">$arr</span>);</span><br></pre></td></tr></table></figure>
+<p>运行后输出：</p>
+<figure class="highlight http"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attribute">ARRAY</span>: <span class="string">hashtable=0x7f4dbf723278</span></span><br></pre></td></tr></table></figure>
+<p>证明扩展载入成功，这样，我们就开发完了一个简单的扩展。</p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>使用C来开发PHP扩展可以极大的提高运行率，但扩展的开发比较复杂、开发周期长，所以，个中利弊还是要自己权衡。<br>本文只是开发PHP扩展的一个简单示范，演示一下PHP扩展开发的一般流程，并不深入研究相关的API。</p>]]>
+    
+    </summary>
+    
+      <category term="php" scheme="http://yoursite.com/tags/php/"/>
+    
+      <category term="php" scheme="http://yoursite.com/categories/php/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[NGINX基本管理]]></title>
+    <link href="http://yoursite.com/2014/12/07/NGINX%E5%9F%BA%E6%9C%AC%E7%AE%A1%E7%90%86/"/>
+    <id>http://yoursite.com/2014/12/07/NGINX基本管理/</id>
+    <published>2014-12-07T12:46:52.000Z</published>
+    <updated>2015-01-31T07:07:54.000Z</updated>
+    <content type="html"><![CDATA[<p>翻译自 <a href="http://nginx.org/en/docs/control.html" target="_blank" rel="external">原文</a></p>
+<ul>
+<li><a href="#更改配置">更改配置</a></li>
+<li><a href="#切割日志文件">切割日志文件</a></li>
+<li><a href="#不重启，更新nginx的可执行文件">不重启，更新nginx的可执行文件</a></li>
+</ul>
+<p>nginx可以通过信号来控制。master进程的进程ID默认被写入到<code>/usr/local/nginx/logs/nginx.pid</code>中。该路径名可以在配置时更改，或者直接在<code>nginx.conf</code>中使用 <a href="http://nginx.org/en/docs/ngx_core_module.html#pid" target="_blank" rel="external">pid</a>。master进程支持以下信号：</p>
+<a id="more"></a>
+<blockquote>
+<p><strong>TERM,INT</strong> 快速关闭<br><strong>QUIT</strong> 优雅的关闭<br><strong>HUP</strong> 更改配置，更新时区（只适用于FreeBSD和Linux），使用新的配置启动新的woker进程，优雅的关闭旧的worker进程。<br><strong>USR1</strong> 重新打开日志文件<br><strong>USR2</strong> 更新nginx<br><strong>WINCH</strong> 优雅的关闭worker进程。</p>
+</blockquote>
+<p>单个的worker进程也可以通过信号来控制，虽然这并不是必须的。支持的信号如下：</p>
+<blockquote>
+<p><strong>TERM,INT</strong> 快速关闭<br><strong>QUIT</strong> 优雅的关闭<br><strong>USR1</strong> 重新打开日志文件<br><strong>WINCH</strong> 非正常终止进程来调试(需要开启 <a href="http://nginx.org/en/docs/ngx_core_module.html#debug_points" target="_blank" rel="external">debug_points</a> 选项)</p>
+</blockquote>
+<p><strong>注：</strong></p>
+<ul>
+<li>优雅的关闭：worker进程会在关闭之前为已建立的连接提供完服务。</li>
+<li>快速关闭：所有的worker进程立刻关闭，即使还有未提供完服务的连接。</li>
+</ul>
+<h2 id="更改配置">更改配置</h2><p>为了能让nginx重新读取配置文件，我们可以向master进程发送<strong>HUP</strong>信号。master进程会首先验证语法的正确性，然后尝试应用新的配置，也就是，打开新的日志文件和新的套接字。如果尝试失败，它会回滚更改并继续使用原来的配置文件。如果尝试成功，它会开启新的worker进程，并向旧的worker进程发送信号，要求它们进行”优雅的关闭”。而后，旧的worker进程会关闭套接字并继续为已建立的连接提供服务。等到所有的连接都服务完了，旧的worker进程才会关闭。</p>
+<p>让我们通过以下的例子演示以下。假设nginx运行在FreeBSD 4.x上，并使用以下命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ps axw -o pid,ppid,user,%cpu,vsz,wchan,<span class="built_in">command</span> | egrep <span class="string">'(nginx|PID)'</span></span><br></pre></td></tr></table></figure>
+<p>输出如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">  PID  PPID USER    %CPU   VSZ WCHAN  COMMAND</span><br><span class="line"><span class="number">33126</span>     <span class="number">1</span> root     <span class="number">0.0</span>  <span class="number">1148</span> pause  nginx: master process /usr/<span class="built_in">local</span>/nginx/sbin/nginx</span><br><span class="line"><span class="number">33127</span> <span class="number">33126</span> nobody   <span class="number">0.0</span>  <span class="number">1380</span> kqread nginx: worker process (nginx)</span><br></pre></td></tr></table></figure>
+<p>如果此时向master进程发送HUP命令，输出会变成下面这样：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">  PID  PPID USER    %CPU   VSZ WCHAN  COMMAND</span><br><span class="line"><span class="number">33126</span>     <span class="number">1</span> root     <span class="number">0.0</span>  <span class="number">1164</span> pause  nginx: master process /usr/<span class="built_in">local</span>/nginx/sbin/nginx</span><br><span class="line"><span class="number">33129</span> <span class="number">33126</span> nobody   <span class="number">0.0</span>  <span class="number">1380</span> kqread nginx: worker process is shutting down (nginx)</span><br><span class="line"><span class="number">33134</span> <span class="number">33126</span> nobody   <span class="number">0.0</span>  <span class="number">1368</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">33135</span> <span class="number">33126</span> nobody   <span class="number">0.0</span>  <span class="number">1368</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">33136</span> <span class="number">33126</span> nobody   <span class="number">0.0</span>  <span class="number">1368</span> kqread nginx: worker process (nginx)</span><br></pre></td></tr></table></figure>
+<p>PID为33129的进程会继续工作，它退出后输出如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">  PID  PPID USER    %CPU   VSZ WCHAN  COMMAND</span><br><span class="line"><span class="number">33126</span>     <span class="number">1</span> root     <span class="number">0.0</span>  <span class="number">1164</span> pause  nginx: master process /usr/<span class="built_in">local</span>/nginx/sbin/nginx</span><br><span class="line"><span class="number">33134</span> <span class="number">33126</span> nobody   <span class="number">0.0</span>  <span class="number">1368</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">33135</span> <span class="number">33126</span> nobody   <span class="number">0.0</span>  <span class="number">1368</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">33136</span> <span class="number">33126</span> nobody   <span class="number">0.0</span>  <span class="number">1368</span> kqread nginx: worker process (nginx)</span><br></pre></td></tr></table></figure>
+<h2 id="切割日志文件">切割日志文件</h2><p>原文说的不太详细，该部分的详细介绍请见： <a href="http://www.cnblogs.com/benio/archive/2010/10/13/1849935.html" target="_blank" rel="external">链接</a> </p>
+<h2 id="不重启，更新nginx的可执行文件">不重启，更新nginx的可执行文件</h2><p>为了更新nginx的可执行文件，新的可执行文件需要先替换掉旧的可执行文件。而后，向master进程发送USR2信号。master进程先将nginx.pid重命名为nginx.pid.oldbin，而后它会启动一个新的master进程，新的master进程再启动新的worker进程。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">  PID  PPID USER    %CPU   VSZ WCHAN  COMMAND</span><br><span class="line"><span class="number">33126</span>     <span class="number">1</span> root     <span class="number">0.0</span>  <span class="number">1164</span> pause  nginx: master process /usr/<span class="built_in">local</span>/nginx/sbin/nginx</span><br><span class="line"><span class="number">33134</span> <span class="number">33126</span> nobody   <span class="number">0.0</span>  <span class="number">1368</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">33135</span> <span class="number">33126</span> nobody   <span class="number">0.0</span>  <span class="number">1380</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">33136</span> <span class="number">33126</span> nobody   <span class="number">0.0</span>  <span class="number">1368</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">36264</span> <span class="number">33126</span> root     <span class="number">0.0</span>  <span class="number">1148</span> pause  nginx: master process /usr/<span class="built_in">local</span>/nginx/sbin/nginx</span><br><span class="line"><span class="number">36265</span> <span class="number">36264</span> nobody   <span class="number">0.0</span>  <span class="number">1364</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">36266</span> <span class="number">36264</span> nobody   <span class="number">0.0</span>  <span class="number">1364</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">36267</span> <span class="number">36264</span> nobody   <span class="number">0.0</span>  <span class="number">1364</span> kqread nginx: worker process (nginx)</span><br></pre></td></tr></table></figure>
+<p>之后，新旧worker进程都继续接受请求。如果现在向旧master进程发送”WINCH”信号，它会向它的worker进程发送信号，要求它们优雅的关闭，而后这些woker会退出：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">  PID  PPID USER    %CPU   VSZ WCHAN  COMMAND</span><br><span class="line"><span class="number">33126</span>     <span class="number">1</span> root     <span class="number">0.0</span>  <span class="number">1164</span> pause  nginx: master process /usr/<span class="built_in">local</span>/nginx/sbin/nginx</span><br><span class="line"><span class="number">33135</span> <span class="number">33126</span> nobody   <span class="number">0.0</span>  <span class="number">1380</span> kqread nginx: worker process is shutting down (nginx)</span><br><span class="line"><span class="number">36264</span> <span class="number">33126</span> root     <span class="number">0.0</span>  <span class="number">1148</span> pause  nginx: master process /usr/<span class="built_in">local</span>/nginx/sbin/nginx</span><br><span class="line"><span class="number">36265</span> <span class="number">36264</span> nobody   <span class="number">0.0</span>  <span class="number">1364</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">36266</span> <span class="number">36264</span> nobody   <span class="number">0.0</span>  <span class="number">1364</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">36267</span> <span class="number">36264</span> nobody   <span class="number">0.0</span>  <span class="number">1364</span> kqread nginx: worker process (nginx)</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>当在Linux使用的是”rtsig”方法时，当向旧master进程发送”WINCH”信号后，新的worker进程可能不会接受客户端请求。这种情况下，可以继续向新master进程发送USR1信号，直到新的worker进程开始接受客户端请求。</p>
+</blockquote>
+<p>一段时间后，会只有新的worker进程会处理客户端请求：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">  PID  PPID USER    %CPU   VSZ WCHAN  COMMAND</span><br><span class="line"><span class="number">33126</span>     <span class="number">1</span> root     <span class="number">0.0</span>  <span class="number">1164</span> pause  nginx: master process /usr/<span class="built_in">local</span>/nginx/sbin/nginx</span><br><span class="line"><span class="number">36264</span> <span class="number">33126</span> root     <span class="number">0.0</span>  <span class="number">1148</span> pause  nginx: master process /usr/<span class="built_in">local</span>/nginx/sbin/nginx</span><br><span class="line"><span class="number">36265</span> <span class="number">36264</span> nobody   <span class="number">0.0</span>  <span class="number">1364</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">36266</span> <span class="number">36264</span> nobody   <span class="number">0.0</span>  <span class="number">1364</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">36267</span> <span class="number">36264</span> nobody   <span class="number">0.0</span>  <span class="number">1364</span> kqread nginx: worker process (nginx)</span><br></pre></td></tr></table></figure>
+<p>需要特别说明的是，旧master进程不会关闭它的套接字，如果需要的话，我们可以让它重新启动worker进程。如果由于某些原因，新的可执行文件不能正常的工作，可以使用以下的方式来解决：</p>
+<ul>
+<li>向旧master进程发送”HUP”信号。旧master进程会开启新的worker进程（不会再读取配置文件）。此时再向新的master进程发送QUIT信号，它创建的worker进程会“优雅的关闭”。</li>
+<li>向新的master进程发送TERM信号。它会向它的worker进程发送信息，要求它们立刻退出。（如果由于某些原因这些新的进程没有退出，需要向这些进程发送”KILL”信号，强制它们推出。）当新的master进程。</li>
+</ul>
+<p>如果新的master进程推出了，旧的master进程会忽略nginx.pid的后缀–.oldbin。</p>
+<p>如果升级成功，向旧的master进程发送QUIT信号，此时，只剩下新的进程：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">PID  PPID USER    %CPU   VSZ WCHAN  COMMAND</span><br><span class="line"><span class="number">36264</span>     <span class="number">1</span> root     <span class="number">0.0</span>  <span class="number">1148</span> pause  nginx: master process /usr/<span class="built_in">local</span>/nginx/sbin/nginx</span><br><span class="line"><span class="number">36265</span> <span class="number">36264</span> nobody   <span class="number">0.0</span>  <span class="number">1364</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">36266</span> <span class="number">36264</span> nobody   <span class="number">0.0</span>  <span class="number">1364</span> kqread nginx: worker process (nginx)</span><br><span class="line"><span class="number">36267</span> <span class="number">36264</span> nobody   <span class="number">0.0</span>  <span class="number">1364</span> kqread nginx: worker process (nginx)</span><br></pre></td></tr></table></figure>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>翻译自 <a href="http://nginx.org/en/docs/control.html">原文</a></p>
+<ul>
+<li><a href="#更改配置">更改配置</a></li>
+<li><a href="#切割日志文件">切割日志文件</a></li>
+<li><a href="#不重启，更新nginx的可执行文件">不重启，更新nginx的可执行文件</a></li>
+</ul>
+<p>nginx可以通过信号来控制。master进程的进程ID默认被写入到<code>/usr/local/nginx/logs/nginx.pid</code>中。该路径名可以在配置时更改，或者直接在<code>nginx.conf</code>中使用 <a href="http://nginx.org/en/docs/ngx_core_module.html#pid">pid</a>。master进程支持以下信号：</p>]]>
+    
+    </summary>
+    
+      <category term="nginx" scheme="http://yoursite.com/tags/nginx/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[不用重启，更新NGINX配置]]></title>
+    <link href="http://yoursite.com/2014/11/13/%E4%B8%8D%E7%94%A8%E9%87%8D%E5%90%AF%EF%BC%8C%E6%9B%B4%E6%96%B0NGINX%E9%85%8D%E7%BD%AE/"/>
+    <id>http://yoursite.com/2014/11/13/不用重启，更新NGINX配置/</id>
+    <published>2014-11-13T05:30:10.000Z</published>
+    <updated>2015-01-31T07:07:54.000Z</updated>
+    <content type="html"><![CDATA[<p>向nginx的master进程发送HUP信号</p>
+<a id="more"></a>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ sudo <span class="built_in">kill</span> -HUP [master PID]</span><br></pre></td></tr></table></figure>
+<p>或<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ sudo <span class="built_in">kill</span> <span class="operator">-s</span> HUP [master PID]</span><br></pre></td></tr></table></figure></p>
+<p><a href="http://nginx.org/en/docs/control.html" target="_blank" rel="external">参考文档</a></p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>向nginx的master进程发送HUP信号</p>]]>
+    
+    </summary>
+    
+      <category term="nginx" scheme="http://yoursite.com/tags/nginx/"/>
+    
+      <category term="nginx" scheme="http://yoursite.com/categories/nginx/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[redis使用sentinel进行failover]]></title>
+    <link href="http://yoursite.com/2014/11/07/redis%E4%BD%BF%E7%94%A8sentinel%E8%BF%9B%E8%A1%8Cfailover/"/>
+    <id>http://yoursite.com/2014/11/07/redis使用sentinel进行failover/</id>
+    <published>2014-11-07T09:29:19.000Z</published>
+    <updated>2015-01-31T07:07:54.000Z</updated>
+    <content type="html"><![CDATA[<p>可以开启两个实例， 一个master, 一个slave，同时开启sentinel。在master崩溃的情况下，sentinel可以将slave切换为master，保证服务正常进行。</p>
+<a id="more"></a>
+<h1 id="环境模拟">环境模拟</h1><p>redis2.8.17。开启两个实例，一个master，一个slave。</p>
+<ul>
+<li><p>master (127.0.0.1 6379)<br>修改mater的配置文件master.conf，添加以下命令</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># redis在后台运行</span></span><br><span class="line"><span class="title">daemonize</span> <span class="built_in">yes</span></span><br><span class="line">pidfile <span class="string">"/var/run/master.pid"</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>slave (127.0.0.1 6380)</p>
+</li>
+</ul>
+<p>在slave的配置文件slave.conf中添加以下命令：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">daemonize yes</span><br><span class="line">port <span class="number">6380</span></span><br><span class="line">pidfile <span class="string">"/var/run/slave.pid"</span></span><br><span class="line">slaveof <span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span> <span class="number">6379</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>sentinel</li>
+</ul>
+<p>在sentinel的配置文件sentinel.conf中添加以下命令:</p>
+<figure class="highlight smali"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sentinel<span class="instruction"> monitor </span>mymaster 127.0.0.1 6379 1</span><br></pre></td></tr></table></figure>
+<p>该指令格式为：<code>SENTINEL MONITOR &lt;name&gt; &lt;ip&gt; &lt;port&gt; &lt;quorum&gt;</code><br><code>&lt;quorum&gt;</code>指定必须有指定数目的sentinel认定当前master处于ODOWN状态，才能进行failover。<br>由于我只配置了一个sentinel，在我的配置中该值指定为1。只要sentinel认定master处于ODOWN状态，即可进行failover。</p>
+<p><strong>注：</strong> 如果想让sentinel像其它的redis实例一样在后台运行，可以在配置文件中添加<code>daemonize yes</code>命令。（<a href="https://groups.google.com/forum/#!topic/redis-db/Wf-EwvWKVoI" target="_blank" rel="external">来源</a> ）根据redis作者的说法，基本上redis.conf使用的命令在sentinel中都可以使用。</p>
+<h1 id="实验过程">实验过程</h1><p>1. 启动master和slave</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ./redis-server master.conf</span></span><br><span class="line"><span class="comment"># ./redis-server slave.conf</span></span><br></pre></td></tr></table></figure>
+<p>2. 启动sentinel</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ./redis-sentinel sentinel.conf</span></span><br></pre></td></tr></table></figure>
+<p><img src="https://github.com/pein0119/pein0119.github.io/blob/master/image/14-11-07-1.png?raw=true" alt=""></p>
+<p>sentinel会自动查找当前master的slave。</p>
+<p>3. 关闭master实例</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ./redis-cli -p 6379 shutdown</span></span><br></pre></td></tr></table></figure>
+<p>sentinel打出的log如下:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">58.818</span> <span class="comment"># +sdown master mymaster 127.0.0.1 6379</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">58.818</span> <span class="comment"># +odown master mymaster 127.0.0.1 6379 #quorum 1/1</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">58.818</span> <span class="comment"># +new-epoch 2</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">58.818</span> <span class="comment"># +try-failover master mymaster 127.0.0.1 6379</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">58.821</span> <span class="comment"># +vote-for-leader 71a815d5be09345037e958f8b8b117aef2da5834 2</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">58.821</span> <span class="comment"># +elected-leader master mymaster 127.0.0.1 6379</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">58.821</span> <span class="comment"># +failover-state-select-slave master mymaster 127.0.0.1 6379</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">58.897</span> <span class="comment"># +selected-slave slave 127.0.0.1:6380 127.0.0.1 6380 @ mymaster 127.0.0.1 6379</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">58.897</span> * +failover-state-send-slaveof-noone slave <span class="number">127.0</span>.<span class="number">0.1</span>:<span class="number">6380</span> <span class="number">127.0</span>.<span class="number">0.1</span> <span class="number">6380</span> @ mymaster <span class="number">127.0</span>.<span class="number">0.1</span> <span class="number">6379</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">58.997</span> * +failover-state-wait-promotion slave <span class="number">127.0</span>.<span class="number">0.1</span>:<span class="number">6380</span> <span class="number">127.0</span>.<span class="number">0.1</span> <span class="number">6380</span> @ mymaster <span class="number">127.0</span>.<span class="number">0.1</span> <span class="number">6379</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">59.882</span> <span class="comment"># +promoted-slave slave 127.0.0.1:6380 127.0.0.1 6380 @ mymaster 127.0.0.1 6379</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">59.882</span> <span class="comment"># +failover-state-reconf-slaves master mymaster 127.0.0.1 6379</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">59.934</span> <span class="comment"># +failover-end master mymaster 127.0.0.1 6379</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">59.934</span> <span class="comment"># +switch-master mymaster 127.0.0.1 6379 127.0.0.1 6380</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">13</span>:<span class="number">59.934</span> * +slave slave <span class="number">127.0</span>.<span class="number">0.1</span>:<span class="number">6379</span> <span class="number">127.0</span>.<span class="number">0.1</span> <span class="number">6379</span> @ mymaster <span class="number">127.0</span>.<span class="number">0.1</span> <span class="number">6380</span></span><br><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">14</span>:<span class="number">29.959</span> <span class="comment"># +sdown slave 127.0.0.1:6379 127.0.0.1 6379 @ mymaster 127.0.0.1 6380</span></span><br></pre></td></tr></table></figure>
+<p>当master实例不可用时，sentinel将slave选为新的master。</p>
+<p>4. 重启原master实例</p>
+<p>此时sentinel的log如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">[<span class="number">12619</span>] <span class="number">07</span> Nov <span class="number">18</span>:<span class="number">26</span>:<span class="number">35.900</span> * +convert-to-slave slave <span class="number">127.0</span>.<span class="number">0.1</span>:<span class="number">6379</span> <span class="number">127.0</span>.<span class="number">0.1</span> <span class="number">6379</span> @ mymaster <span class="number">127.0</span>.<span class="number">0.1</span> <span class="number">6380</span></span><br></pre></td></tr></table></figure>
+<p>原master重启之后被sentinel设置为了新的slave，完成了主从切换。</p>
+<h1 id="解释">解释</h1><p>当有<code>&lt;quorum&gt;</code>个sentinel认定当前的master不可用时，sentinel们会选出一个sentinel进行failover。被选中的sentinel会从slave中选出一个作为新的master，并将新master的配置信息传输给其它的slave。原master重启后会被sentinel设置为当前master的slave。<br>详细文档请见： <a href="http://redis.io/topics/sentinel" target="_blank" rel="external">链接</a></p>
+<h1 id="PHP实现的sentinel_client">PHP实现的sentinel client</h1><p>暂时只找到这一个，<a href="https://github.com/Sparkcentral/PSRedis" target="_blank" rel="external">链接</a><br>在原master挂掉之后，客户端代码需要通过sentinel获取最新的master配置信息。</p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>可以开启两个实例， 一个master, 一个slave，同时开启sentinel。在master崩溃的情况下，sentinel可以将slave切换为master，保证服务正常进行。</p>]]>
+    
+    </summary>
+    
+      <category term="redis" scheme="http://yoursite.com/tags/redis/"/>
+    
+      <category term="redis" scheme="http://yoursite.com/categories/redis/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[PHP版本不同引发的错误]]></title>
+    <link href="http://yoursite.com/2014/10/31/PHP%E7%89%88%E6%9C%AC%E4%B8%8D%E5%90%8C%E5%BC%95%E5%8F%91%E7%9A%84%E9%94%99%E8%AF%AF/"/>
+    <id>http://yoursite.com/2014/10/31/PHP版本不同引发的错误/</id>
+    <published>2014-10-31T02:58:27.000Z</published>
+    <updated>2015-01-31T07:07:54.000Z</updated>
+    <content type="html"><![CDATA[<p>前几天项目开始测试，在我的机器上跑的好好的代码，到了测试人员的机器上就跑不起来了，最后发现，测试机器上的PHP是5.3，我自己的机器是PHP 5.4，我写的代码中有两行是PH5.3不支持的。</p>
+<a id="more"></a>
+<p>演示代码：<br><figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="preprocessor">&lt;?php</span></span><br><span class="line"><span class="variable">$arrays</span> = <span class="keyword">array</span>(</span><br><span class="line">    <span class="number">0</span> =&gt; <span class="keyword">array</span>(</span><br><span class="line">        <span class="string">'a1'</span> =&gt; <span class="number">1</span>,</span><br><span class="line">        <span class="string">'a2'</span> =&gt; <span class="number">2</span></span><br><span class="line">    ),</span><br><span class="line"></span><br><span class="line">    <span class="number">1</span> =&gt; <span class="keyword">array</span>(</span><br><span class="line">        <span class="string">'a1'</span> =&gt; <span class="number">1</span>,</span><br><span class="line">        <span class="string">'a2'</span> =&gt; <span class="number">2</span></span><br><span class="line">    )</span><br><span class="line">);</span><br><span class="line"><span class="preprocessor">?&gt;</span></span><br></pre></td></tr></table></figure></p>
+<p>我要取$arrays中的最后一个子数组中的a1对应的值，我使用的是下面的语法：</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">$a1</span> = end(<span class="variable">$arrays</span>)[<span class="string">'a1'</span>];</span><br></pre></td></tr></table></figure>
+<p>但是在PHP5.3下却报语法错误，5.3竟然不支持这种语法？？？？？？？？？<br>好吧，无语了，只能改成下面的语法：</p>
+<figure class="highlight php"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">$array_last</span> = end(<span class="variable">$arrays</span>);</span><br><span class="line"><span class="variable">$a1</span> = <span class="variable">$array_last</span>[<span class="string">'a1'</span>];</span><br></pre></td></tr></table></figure>
+<p>这也算是PHP中的一个坑。</p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>前几天项目开始测试，在我的机器上跑的好好的代码，到了测试人员的机器上就跑不起来了，最后发现，测试机器上的PHP是5.3，我自己的机器是PHP 5.4，我写的代码中有两行是PH5.3不支持的。</p>]]>
+    
+    </summary>
+    
+      <category term="php" scheme="http://yoursite.com/tags/php/"/>
+    
+      <category term="php" scheme="http://yoursite.com/categories/php/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[MySQL终端执行SQL文件]]></title>
+    <link href="http://yoursite.com/2014/10/22/MySQL%E7%BB%88%E7%AB%AF%E6%89%A7%E8%A1%8CSQL%E6%96%87%E4%BB%B6/"/>
+    <id>http://yoursite.com/2014/10/22/MySQL终端执行SQL文件/</id>
+    <published>2014-10-22T02:29:13.000Z</published>
+    <updated>2015-01-31T07:07:54.000Z</updated>
+    <content type="html"><![CDATA[<p>对于sql，我们可以在终端输入以下命令：</p>
+<a id="more"></a>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ mysql -u [user] -p</span><br></pre></td></tr></table></figure>
+<p>登录到mysql，然后一条一条的执行。除了这种方式，我们还可以在终端直接执行SQL文件。</p>
+<h2 id="方式一">方式一</h2><ul>
+<li>数据库还未创建时：<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ mysql -u [user] -p &lt; [/path/to/sql]</span><br></pre></td></tr></table></figure>
+</li>
+</ul>
+<p>对于这个SQL文件：</p>
+<figure class="highlight sql"><figcaption><span>01-create-database-login.sql</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="operator"><span class="keyword">CREATE</span> <span class="keyword">DATABASE</span> <span class="keyword">IF</span> <span class="keyword">NOT</span> <span class="keyword">EXISTS</span> <span class="string">`login`</span>;</span></span><br></pre></td></tr></table></figure>
+<p>可以终端执行以下命令：<br><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ mysql -u root -p &lt; ./<span class="number">01</span>-create-database-login.sql</span><br></pre></td></tr></table></figure></p>
+<ul>
+<li>数据库已经创建，假设数据库名是上面刚创建的 <code>login</code></li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="variable">$myql</span> -u [user] -p [database] &lt; [/path/to/sql]</span><br></pre></td></tr></table></figure>
+<p>对于这个SQL文件：</p>
+<figure class="highlight bash"><figcaption><span>02-create-table-users.sql</span></figcaption><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">CREATE TABLE IF NOT EXISTS `login`.`users` (</span><br><span class="line">`user_id` int(<span class="number">11</span>) NOT NULL AUTO_INCREMENT COMMENT <span class="string">'auto incrementing user_id of each user, unique index'</span>,</span><br><span class="line">`user_name` varchar(<span class="number">64</span>) COLLATE utf8_unicode_ci NOT NULL COMMENT <span class="string">'user'</span><span class="string">'s name, unique'</span>,</span><br><span class="line">`user_password_<span class="built_in">hash</span>` VARCHAR(<span class="number">255</span>) COLLATE utf8_unicode_ci DEFAULT NULL COMMENT <span class="string">'user'</span><span class="string">'s password in salted and hashed format'</span>,</span><br><span class="line">`user_email` varchar(<span class="number">64</span>) COLLATE utf8_unicode_ci NOT NULL COMMENT <span class="string">'user'</span><span class="string">'s email, unique'</span>,</span><br><span class="line">`user_active` tinyint(<span class="number">1</span>) NOT NULL DEFAULT <span class="string">'0'</span> COMMENT <span class="string">'user'</span><span class="string">'s activation status'</span>,</span><br><span class="line">`user_account_<span class="built_in">type</span>` tinyint(<span class="number">1</span>) NOT NULL DEFAULT <span class="string">'1'</span> COMMENT <span class="string">'user'</span><span class="string">'s account type (basic, premium, etc)'</span>,</span><br><span class="line">`user_has_avatar` tinyint(<span class="number">1</span>) NOT NULL DEFAULT <span class="string">'0'</span> COMMENT <span class="string">'1 if user has a local avatar, 0 if not'</span>,</span><br><span class="line">`user_rememberme_token` varchar(<span class="number">64</span>) COLLATE utf8_unicode_ci DEFAULT NULL COMMENT <span class="string">'user'</span><span class="string">'s remember-me cookie token'</span>,</span><br><span class="line">`user_creation_timestamp` bigint(<span class="number">20</span>) DEFAULT NULL COMMENT <span class="string">'timestamp of the creation of user'</span><span class="string">'s account'</span>,</span><br><span class="line">`user_last_login_timestamp` bigint(<span class="number">20</span>) DEFAULT NULL COMMENT <span class="string">'timestamp of user'</span><span class="string">'s last login'</span>,</span><br><span class="line">`user_failed_logins` tinyint(<span class="number">1</span>) NOT NULL DEFAULT <span class="string">'0'</span> COMMENT <span class="string">'user'</span><span class="string">'s failed login attempts'</span>,</span><br><span class="line">`user_last_failed_login` int(<span class="number">10</span>) DEFAULT NULL COMMENT <span class="string">'unix timestamp of last failed login attempt'</span>,</span><br><span class="line">`user_activation_<span class="built_in">hash</span>` varchar(<span class="number">40</span>) COLLATE utf8_unicode_ci DEFAULT NULL COMMENT <span class="string">'user'</span><span class="string">'s email verification hash string'</span>,</span><br><span class="line">`user_password_reset_<span class="built_in">hash</span>` char(<span class="number">40</span>) COLLATE utf8_unicode_ci DEFAULT NULL COMMENT <span class="string">'user'</span><span class="string">'s password reset code'</span>,</span><br><span class="line">`user_password_reset_timestamp` bigint(<span class="number">20</span>) DEFAULT NULL COMMENT <span class="string">'timestamp of the password reset request'</span>,</span><br><span class="line">`user_provider_<span class="built_in">type</span>` text COLLATE utf8_unicode_ci,</span><br><span class="line">`user_facebook_uid` bigint(<span class="number">20</span>) unsigned DEFAULT NULL COMMENT <span class="string">'optional - facebook UID'</span>,</span><br><span class="line">PRIMARY KEY (`user_id`),</span><br><span class="line">UNIQUE KEY `user_name` (`user_name`),</span><br><span class="line">UNIQUE KEY `user_email` (`user_email`),</span><br><span class="line">KEY `user_facebook_uid` (`user_facebook_uid`)</span><br><span class="line">) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci COMMENT=<span class="string">'user data'</span>;</span><br></pre></td></tr></table></figure>
+<p>可以终端执行以下命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ msyql -u root -p login &lt; ./<span class="number">02</span>-create-table-users.sql</span><br></pre></td></tr></table></figure>
+<h2 id="方式二">方式二</h2><p>先登录到myql，然后使用source命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ mysql -u [user] -p</span><br><span class="line">mysql&gt; <span class="built_in">source</span> [/path/to/sql]</span><br></pre></td></tr></table></figure>
+<p>示例：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ mysql -u root -p</span><br><span class="line">mysql&gt; <span class="built_in">source</span> ./<span class="number">02</span>-create-table-users.sql</span><br></pre></td></tr></table></figure>
+<p>(结束)</p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>对于sql，我们可以在终端输入以下命令：</p>]]>
+    
+    </summary>
+    
+      <category term="mysql" scheme="http://yoursite.com/tags/mysql/"/>
+    
+      <category term="sql" scheme="http://yoursite.com/tags/sql/"/>
+    
+      <category term="mysql" scheme="http://yoursite.com/categories/mysql/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[nginx支持pathinfo]]></title>
+    <link href="http://yoursite.com/2014/09/22/nginx%E6%94%AF%E6%8C%81pathinfo/"/>
+    <id>http://yoursite.com/2014/09/22/nginx支持pathinfo/</id>
+    <published>2014-09-22T01:25:48.000Z</published>
+    <updated>2015-01-31T07:07:54.000Z</updated>
+    <content type="html"><![CDATA[<p>原来的配置为:</p>
+<a id="more"></a>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"> <span class="title">location</span> <span class="regexp">~ \.php$</span> &#123;</span><br><span class="line">     <span class="title">root</span>           /opt/www/; <span class="comment">#我的根路径</span></span><br><span class="line">     <span class="title">fastcgi_pass</span>   <span class="number">127.0.0.1:9000</span>;</span><br><span class="line">     <span class="title">fastcgi_index</span>  index.php;</span><br><span class="line">     <span class="title">include</span>        fastcgi.conf;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>修改后的配置为：</p>
+<figure class="highlight nginx"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="title">location</span> <span class="regexp">~ \.php</span> &#123;</span><br><span class="line">    <span class="title">root</span>          /opt/www/; <span class="comment">#我的根路径</span></span><br><span class="line">	<span class="title">fastcgi_pass</span>   <span class="number">127.0.0.1:9000</span>;</span><br><span class="line">	<span class="title">fastcgi_index</span> index.php;</span><br><span class="line">	<span class="title">fastcgi_split_path_info</span><span class="regexp"> ^(.+?\.php)(/.*)$</span>;</span><br><span class="line">	<span class="title">include</span>       fastcgi.conf;</span><br><span class="line">	<span class="title">fastcgi_param</span> PATH_INFO <span class="variable">$fastcgi_path_info</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>原来的配置为:</p>]]>
+    
+    </summary>
+    
+      <category term="nginx" scheme="http://yoursite.com/tags/nginx/"/>
+    
+      <category term="nginx" scheme="http://yoursite.com/categories/nginx/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[关于shell命令--date的注意事项]]></title>
+    <link href="http://yoursite.com/2014/09/19/%E5%85%B3%E4%BA%8Eshell%E5%91%BD%E4%BB%A4-date%E7%9A%84%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9/"/>
+    <id>http://yoursite.com/2014/09/19/关于shell命令-date的注意事项/</id>
+    <published>2014-09-19T06:34:36.000Z</published>
+    <updated>2015-01-31T07:07:54.000Z</updated>
+    <content type="html"><![CDATA[<p>今天网站出现了一个bug，判定是网站缓存清理出现了问题。排查之后，定位到了清理缓存的脚本上。  </p>
+<a id="more"></a>
+<p>脚本可以简化如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">HOUR=`date +%H`</span><br><span class="line">STEP=<span class="number">21</span></span><br><span class="line"></span><br><span class="line">START=$((<span class="variable">$HOUR</span>*<span class="variable">$STEP</span>))</span><br><span class="line">END=$(((<span class="variable">$HOUR</span>+<span class="number">1</span>)*<span class="variable">$STEP</span>))</span><br></pre></td></tr></table></figure>
+<p>脚本的第一行赋值有问题，date命令的手册：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">%<span class="function">H     <span class="title">hour</span> <span class="params">(<span class="number">00.</span><span class="number">.23</span>)</span></span></span><br></pre></td></tr></table></figure>
+<p>使用<code>%H</code>参数得到的小时数是两位的，所以当前是0点到9点的时候，得到的是00–09。由于前缀0的原因，bash会把该值当作八进制来处理。<br>问题来了，当时间在7点到九点的时候，脚本的执行就会发生错误：  </p>
+<ul>
+<li>7点时,HOUR的值为07,运行到第五行(($HOUR+1))的时候得到08。八进制表示的数竟然出现了8，肯定会出错。</li>
+<li>8点和9点时，在脚本第一行赋值的时候就会出错。</li>
+</ul>
+<p>这个问题由两种解决方案：  </p>
+<ul>
+<li>第一种：将脚本的第一行改为<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">HOUR=<span class="number">10</span><span class="comment">#`date +%H`，</span></span><br></pre></td></tr></table></figure>
+</li>
+</ul>
+<p>加上<code>10#</code>是告诉bash，把数值当作10进制数来处理。</p>
+<ul>
+<li>第二种：将脚本的第一行改为<figure class="highlight vbscript"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">HOUR</span>=`<span class="built_in">date</span> +%k`</span><br></pre></td></tr></table></figure>
+</li>
+</ul>
+<p>因为<code>%k</code>参数得到的小时数是(0..23)，没有前缀0,所以就不存在进制的问题了。</p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>今天网站出现了一个bug，判定是网站缓存清理出现了问题。排查之后，定位到了清理缓存的脚本上。  </p>]]>
+    
+    </summary>
+    
+      <category term="shell" scheme="http://yoursite.com/tags/shell/"/>
+    
+      <category term="shell" scheme="http://yoursite.com/categories/shell/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[cookie”域“]]></title>
+    <link href="http://yoursite.com/2014/09/18/cookie%E5%9F%9F/"/>
+    <id>http://yoursite.com/2014/09/18/cookie域/</id>
+    <published>2014-09-18T14:10:29.000Z</published>
+    <updated>2015-01-31T07:07:54.000Z</updated>
+    <content type="html"><![CDATA[<p>当用户浏览网站的时候，网站会将一小段数据发送给用户并存储在用户的浏览器中。用户访问相同网站的时候，浏览器就会将网站在用户中种下的cookie连同用户请求一同发送给客户端。  </p>
+<a id="more"></a>
+<p>在PHP中，可以使用setcookie()函数向客户端发送一个cookie。参数如下：  </p>
+<figure class="highlight fortran"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">name</span> 必需。指定cookie的名称。</span><br><span class="line"><span class="keyword">value</span> 可选。指定cookie的值。</span><br><span class="line">expire 可选。指定cookie的过期时间</span><br><span class="line">path 可选。指定cookie在服务器上可用的路径</span><br><span class="line">domain 可选。指定cookie有效的域</span><br><span class="line">secure 可选。cookie应当只通过HTTPS传输</span><br><span class="line">httponly 可选。当为TRUE时，表明cookie只可以通过HTTP协议访问。</span><br></pre></td></tr></table></figure>
+<p>当浏览器向网站发送请求的时候，它会根据cookie的域来判断携带哪个cookie。</p>
+<p><strong>如果cookie中没有设置domain属性，此时，有效的域就是“发送的请求“中域。</strong></p>
+<ul>
+<li>若<code>domain=.example.com</code>，则该cookie对<code>www.example.com</code>也可用。</li>
+<li>若<code>domain=.example.com</code>，则该cookie对<code>example.com</code>也可用。</li>
+<li>若<code>domain=example.com</code>，会默认转换为<code>domain=.example.com</code>，因此，对<code>www.example.com</code>也可用。</li>
+<li>若<code>domain=example.com</code>,对<code>anotherexample.com</code>不可用，即cookie是不可以跨域的。</li>
+<li><code>www.example.com</code>可以对<code>example.com</code>设置cookie。</li>
+<li><code>www.example.com</code>不可以对<code>www2.example.com</code>设置cookie。</li>
+</ul>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>当用户浏览网站的时候，网站会将一小段数据发送给用户并存储在用户的浏览器中。用户访问相同网站的时候，浏览器就会将网站在用户中种下的cookie连同用户请求一同发送给客户端。  </p>]]>
+    
+    </summary>
+    
+      <category term="cookie" scheme="http://yoursite.com/tags/cookie/"/>
+    
+      <category term="php" scheme="http://yoursite.com/categories/php/"/>
+    
+  </entry>
+  
+  <entry>
+    <title><![CDATA[nginx和php-fpm使用unix套接字]]></title>
+    <link href="http://yoursite.com/2014/08/29/nginx%E5%92%8Cphp-fpm%E4%BD%BF%E7%94%A8unix%E5%A5%97%E6%8E%A5%E5%AD%97/"/>
+    <id>http://yoursite.com/2014/08/29/nginx和php-fpm使用unix套接字/</id>
+    <published>2014-08-29T02:10:11.000Z</published>
+    <updated>2015-01-31T07:07:54.000Z</updated>
+    <content type="html"><![CDATA[<p><code>UNIX套接字</code>是一种进程间通讯机制(IPC),它可以让运行于同一台机器上的进程间进行双向的数据交换.<br><code>TCP/IP套接字</code>可以让运行于不同机器上的进程进行通讯,不过你也可以使用<strong>回路网络接口</strong>(localhost, 127.0.0.1)让运行同一台机器上的两个进程进行通讯.</p>
+<a id="more"></a>
+<p>所以当两个进程运行于同一台机器上时,<code>UNIX套接字</code>与<code>TCP/IP套接字</code>相比开销更小,因为它不使用网络底层协议,降低了很大的开销.  </p>
+<p>nginx和php-fpm之间默认使用的是<code>TCP/IP套接字</code>,然后使用<strong>回路网络接口</strong>进行通讯.我们可以切换到<code>UNIX套接字</code>来提供性能.  </p>
+<h2 id="步骤">步骤</h2><h3 id="1-修改php-fpm-conf">1.修改php-fpm.conf</h3><p>将<br><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">listen = <span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span>:<span class="number">9000</span></span><br></pre></td></tr></table></figure></p>
+<p>注释掉,在下面增加一行<br><figure class="highlight apache"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword"><span class="common">listen</span></span> = /tmp/php-fpm.sock</span><br></pre></td></tr></table></figure></p>
+<p>将<br><figure class="highlight crmsh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">;listen.owner = www</span><br><span class="line">;listen.<span class="keyword">group</span> <span class="title">= www</span></span><br><span class="line">;listen.mode = <span class="number">0660</span></span><br></pre></td></tr></table></figure></p>
+<p>取消注释.<br><em>注: <code>www</code>是我的nginx服务所属的用户和组,你那可能不一样</em></p>
+<h3 id="2-修改nginx-conf">2.修改nginx.conf</h3><p>将<br><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">fastcgi_pass <span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span>:<span class="number">9000</span></span><br></pre></td></tr></table></figure></p>
+<p>改为<br><figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">fastcgi_pass <span class="string">unix:</span><span class="regexp">/tmp/</span>php-fpm.sock</span><br></pre></td></tr></table></figure></p>
+<h3 id="3-重启nginx和php-fpm">3.重启nginx和php-fpm</h3><h2 id="测试">测试</h2><p>我使用的测试工具是wrk, <a href="https://github.com/wg/wrk" target="_blank" rel="external">下载地址</a>.  </p>
+<p>测试机参数: i3双核四线程,4G内存, ubuntu12.04(64位)  </p>
+<h4 id="使用TCP/IP套接字">使用<code>TCP/IP套接字</code></h4><p><img src="https://github.com/pein0119/pein0119.github.io/blob/master/image/14-08-29-1.png?raw=true" alt=""> </p>
+<h4 id="使用UNIX套接字">使用<code>UNIX套接字</code></h4><p><img src="https://github.com/pein0119/pein0119.github.io/blob/master/image/14-08-29-2.png?raw=true" alt=""> </p>
+<h2 id="结论">结论</h2><p>使用<code>TCP/IP套接字</code>每秒可处理230.46个请求,使用<code>UNIX套接字</code>每秒可处理8352.26个请求.<br>可见:<br><strong>当nginx和php-fpm运行于同一台机器上时,使用UNIX套接字可显著提高性能</strong></p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p><code>UNIX套接字</code>是一种进程间通讯机制(IPC),它可以让运行于同一台机器上的进程间进行双向的数据交换.<br><code>TCP/IP套接字</code>可以让运行于不同机器上的进程进行通讯,不过你也可以使用<strong>回路网络接口</strong>(localhost, 127.0.0.1)让运行同一台机器上的两个进程进行通讯.</p>]]>
+    
+    </summary>
+    
+      <category term="nginx" scheme="http://yoursite.com/tags/nginx/"/>
+    
+      <category term="php-fpm" scheme="http://yoursite.com/tags/php-fpm/"/>
+    
+      <category term="php" scheme="http://yoursite.com/categories/php/"/>
+    
+  </entry>
+  
+</feed>
