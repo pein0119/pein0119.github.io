@@ -335,7 +335,7 @@
     <link href="http://yoursite.com/2015/02/03/%E6%B5%8F%E8%A7%88%E5%99%A8%E7%A6%81%E7%94%A8cookie%E5%90%8E%E5%A6%82%E4%BD%95%E4%BD%BF%E7%94%A8session/"/>
     <id>http://yoursite.com/2015/02/03/浏览器禁用cookie后如何使用session/</id>
     <published>2015-02-03T10:34:45.000Z</published>
-    <updated>2015-02-03T17:05:03.000Z</updated>
+    <updated>2015-12-05T12:49:43.000Z</updated>
     <content type="html"><![CDATA[<p>当你打开一个网站，浏览网站的内容，向网站提交一些数据，然后关闭了这个网站，这就是一次session。你自己的电脑知道你何时打开和关闭这个网站，但是，由于HTTP协议是无状态的，网站并不知道你是谁、你做了什么。  </p>
 <a id="more"></a>
 <p>session变量就是来解决这个问题的。在session变量中存储了用户的一些信息（用户名、刚才执行的动作等等），当用户从一个网页跳转到另一个网页时，网站就可以通过这些信息来获知当前是哪一用户做了哪些事情。  </p>
