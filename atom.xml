@@ -4,7 +4,7 @@
   <subtitle><![CDATA[pein0119's blog]]></subtitle>
   <link href="/atom.xml" rel="self"/>
   <link href="http://yoursite.com/"/>
-  <updated>2016-01-23T07:35:48.000Z</updated>
+  <updated>2016-01-23T08:35:36.000Z</updated>
   <id>http://yoursite.com/</id>
   
   <author>
@@ -13,6 +13,33 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title><![CDATA[记一次redis错误排查]]></title>
+    <link href="http://yoursite.com/2016/01/23/%E8%AE%B0%E4%B8%80%E6%AC%A1twemproxy%E9%94%99%E8%AF%AF%E6%8E%92%E6%9F%A5/"/>
+    <id>http://yoursite.com/2016/01/23/记一次twemproxy错误排查/</id>
+    <published>2016-01-23T07:50:32.000Z</published>
+    <updated>2016-01-23T08:35:36.000Z</updated>
+    <content type="html"><![CDATA[<p>最近，开发周期长达三个月的“预售升级”项目进入了测试阶段。</p>
+<a id="more"></a>
+<p>QA在测试的时候遇到订单付款成功，但是订单列表中订单状态仍然显示为“待支付”的现象，这个bug不必现。(╮(╯▽╰)╭，最讨厌这种奇葩的bug了)<br>排查交易系统日志，发现支付系统发给交易系统的回调一直返回失败，证明QA大姐确实是支付成功了。手动给交易系统发送支付成功请求，并在关键地方输出日志，发现是在修改订单状态前“获取锁”的操作失败了。<br>查看交易系统请求redis的日志，发现修改订单状态前获取锁的操作一直返回失败。<br>我启动我本机上redis，输入加锁命令，发现执行是成功的，那为什么qalab的redis会一直提示失败呢？<br>首先想到的是可能qalab上的redis版本比较老，而<code>RedisLocker:16012210303398</code>这个key比较特殊，触发了某个bug。<br>我查看了qalab上交易系统中redis的配置地址，在rdlab上开启redis-cli连接到qalab的redis,执行订单加锁操作:  </p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&gt; setnx RedisLocker:<span class="number">16012210303398</span> <span class="number">1</span></span><br><span class="line">&gt; (Error) invalid argument(s)</span><br></pre></td></tr></table></figure>
+<p>执行<code>info system</code>命令，想查看一下redis的版本信息，发现redis代理根本不支持这个操作，应该是被禁用了。<br>登陆到qalab的redis机上，直连到一个reids实例，再执行<code>setnx RedisLocker:16012210303398 1</code>，发现执行时成功的。连接到redis代理上，再执行上述命令，还是一直提示失败。到这里，我将问题定位到了redis使用的代理–twemproxy上。<br>这时候我想查看twemproxy的日志，发现运维把日志输出关掉了，好吧，虽然只是个测试环境的redis，也不用做的这么绝吧，连日志都输出。。。。。。。<br>没办法，求助于google，最后在twemproxy的<a href="https://github.com/twitter/twemproxy/issues/403" target="_blank" rel="external">github issue</a>里发现了一些线索，有个人跟我遇到了相同的问题，最后发现是有一个redis实例已经没有可用内存了，导致命令执行失败。<br>死马当活马医，查看twemproxy的配置文件，然后直连到每一个redis实例上，执行<code>set a 1</code>操作，其中一个实例报了以下错误：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(error) OOM <span class="built_in">command</span> not allowed when used memory &gt; <span class="string">'maxmemory'</span>.</span><br></pre></td></tr></table></figure>
+<p>也就是说，这个实例已经没有可用内存了。在这个实例上执行<code>flushall</code>操作，清除所有的缓存(其实直接重启该redis实例更快一点)。</p>
+<p>给交易系统发送支付成功通知，然后观察交易系统的redis日志，发现获取锁操作已经成功，并且订单的状态已经更新为“支付成功”，至此问题解决。</p>
+<p>总结：导致订单加锁失败的原因是有一个redis实例没有可用内存了，而<code>RedisLocker:16012210303398</code>这个key又恰好被twemproxy hash到了这个实例上。twemproxy的错误信息提示不完整，对一些比较重大的错误直接返回”DEFAULT ERROR”，这是比较坑的一个地方。</p>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>最近，开发周期长达三个月的“预售升级”项目进入了测试阶段。</p>]]>
+    
+    </summary>
+    
+      <category term="redis" scheme="http://yoursite.com/tags/redis/"/>
+    
+      <category term="twemproxy" scheme="http://yoursite.com/tags/twemproxy/"/>
+    
+  </entry>
   
   <entry>
     <title><![CDATA[bash代码片段]]></title>
@@ -743,41 +770,6 @@
     </summary>
     
       <category term="cookie" scheme="http://yoursite.com/tags/cookie/"/>
-    
-      <category term="php" scheme="http://yoursite.com/categories/php/"/>
-    
-  </entry>
-  
-  <entry>
-    <title><![CDATA[nginx和php-fpm使用unix套接字]]></title>
-    <link href="http://yoursite.com/2014/08/29/nginx%E5%92%8Cphp-fpm%E4%BD%BF%E7%94%A8unix%E5%A5%97%E6%8E%A5%E5%AD%97/"/>
-    <id>http://yoursite.com/2014/08/29/nginx和php-fpm使用unix套接字/</id>
-    <published>2014-08-29T02:10:11.000Z</published>
-    <updated>2015-01-31T07:07:54.000Z</updated>
-    <content type="html"><![CDATA[<p><code>UNIX套接字</code>是一种进程间通讯机制(IPC),它可以让运行于同一台机器上的进程间进行双向的数据交换.<br><code>TCP/IP套接字</code>可以让运行于不同机器上的进程进行通讯,不过你也可以使用<strong>回路网络接口</strong>(localhost, 127.0.0.1)让运行同一台机器上的两个进程进行通讯.</p>
-<a id="more"></a>
-<p>所以当两个进程运行于同一台机器上时,<code>UNIX套接字</code>与<code>TCP/IP套接字</code>相比开销更小,因为它不使用网络底层协议,降低了很大的开销.  </p>
-<p>nginx和php-fpm之间默认使用的是<code>TCP/IP套接字</code>,然后使用<strong>回路网络接口</strong>进行通讯.我们可以切换到<code>UNIX套接字</code>来提供性能.  </p>
-<h2 id="步骤">步骤</h2><h3 id="1-修改php-fpm-conf">1.修改php-fpm.conf</h3><p>将<br><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">listen = <span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span>:<span class="number">9000</span></span><br></pre></td></tr></table></figure></p>
-<p>注释掉,在下面增加一行<br><figure class="highlight apache"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword"><span class="common">listen</span></span> = /tmp/php-fpm.sock</span><br></pre></td></tr></table></figure></p>
-<p>将<br><figure class="highlight crmsh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">;listen.owner = www</span><br><span class="line">;listen.<span class="keyword">group</span> <span class="title">= www</span></span><br><span class="line">;listen.mode = <span class="number">0660</span></span><br></pre></td></tr></table></figure></p>
-<p>取消注释.<br><em>注: <code>www</code>是我的nginx服务所属的用户和组,你那可能不一样</em></p>
-<h3 id="2-修改nginx-conf">2.修改nginx.conf</h3><p>将<br><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">fastcgi_pass <span class="number">127.0</span><span class="number">.0</span><span class="number">.1</span>:<span class="number">9000</span></span><br></pre></td></tr></table></figure></p>
-<p>改为<br><figure class="highlight groovy"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">fastcgi_pass <span class="string">unix:</span><span class="regexp">/tmp/</span>php-fpm.sock</span><br></pre></td></tr></table></figure></p>
-<h3 id="3-重启nginx和php-fpm">3.重启nginx和php-fpm</h3><h2 id="测试">测试</h2><p>我使用的测试工具是wrk, <a href="https://github.com/wg/wrk" target="_blank" rel="external">下载地址</a>.  </p>
-<p>测试机参数: i3双核四线程,4G内存, ubuntu12.04(64位)  </p>
-<h4 id="使用TCP/IP套接字">使用<code>TCP/IP套接字</code></h4><p><img src="https://github.com/pein0119/pein0119.github.io/blob/master/image/14-08-29-1.png?raw=true" alt=""> </p>
-<h4 id="使用UNIX套接字">使用<code>UNIX套接字</code></h4><p><img src="https://github.com/pein0119/pein0119.github.io/blob/master/image/14-08-29-2.png?raw=true" alt=""> </p>
-<h2 id="结论">结论</h2><p>使用<code>TCP/IP套接字</code>每秒可处理230.46个请求,使用<code>UNIX套接字</code>每秒可处理8352.26个请求.<br>可见:<br><strong>当nginx和php-fpm运行于同一台机器上时,使用UNIX套接字可显著提高性能</strong></p>
-]]></content>
-    <summary type="html">
-    <![CDATA[<p><code>UNIX套接字</code>是一种进程间通讯机制(IPC),它可以让运行于同一台机器上的进程间进行双向的数据交换.<br><code>TCP/IP套接字</code>可以让运行于不同机器上的进程进行通讯,不过你也可以使用<strong>回路网络接口</strong>(localhost, 127.0.0.1)让运行同一台机器上的两个进程进行通讯.</p>]]>
-    
-    </summary>
-    
-      <category term="nginx" scheme="http://yoursite.com/tags/nginx/"/>
-    
-      <category term="php-fpm" scheme="http://yoursite.com/tags/php-fpm/"/>
     
       <category term="php" scheme="http://yoursite.com/categories/php/"/>
     
