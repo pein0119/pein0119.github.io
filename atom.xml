@@ -4,7 +4,7 @@
   <subtitle><![CDATA[pein0119's blog]]></subtitle>
   <link href="/atom.xml" rel="self"/>
   <link href="http://yoursite.com/"/>
-  <updated>2016-01-23T08:35:36.000Z</updated>
+  <updated>2016-01-23T16:25:39.000Z</updated>
   <id>http://yoursite.com/</id>
   
   <author>
@@ -18,8 +18,8 @@
     <title><![CDATA[记一次redis错误排查]]></title>
     <link href="http://yoursite.com/2016/01/23/%E8%AE%B0%E4%B8%80%E6%AC%A1twemproxy%E9%94%99%E8%AF%AF%E6%8E%92%E6%9F%A5/"/>
     <id>http://yoursite.com/2016/01/23/记一次twemproxy错误排查/</id>
-    <published>2016-01-23T07:50:32.000Z</published>
-    <updated>2016-01-23T08:35:36.000Z</updated>
+    <published>2016-01-23T07:50:03.000Z</published>
+    <updated>2016-01-23T16:25:39.000Z</updated>
     <content type="html"><![CDATA[<p>最近，开发周期长达三个月的“预售升级”项目进入了测试阶段。</p>
 <a id="more"></a>
 <p>QA在测试的时候遇到订单付款成功，但是订单列表中订单状态仍然显示为“待支付”的现象，这个bug不必现。(╮(╯▽╰)╭，最讨厌这种奇葩的bug了)<br>排查交易系统日志，发现支付系统发给交易系统的回调一直返回失败，证明QA大姐确实是支付成功了。手动给交易系统发送支付成功请求，并在关键地方输出日志，发现是在修改订单状态前“获取锁”的操作失败了。<br>查看交易系统请求redis的日志，发现修改订单状态前获取锁的操作一直返回失败。<br>我启动我本机上redis，输入加锁命令，发现执行是成功的，那为什么qalab的redis会一直提示失败呢？<br>首先想到的是可能qalab上的redis版本比较老，而<code>RedisLocker:16012210303398</code>这个key比较特殊，触发了某个bug。<br>我查看了qalab上交易系统中redis的配置地址，在rdlab上开启redis-cli连接到qalab的redis,执行订单加锁操作:  </p>
@@ -38,6 +38,8 @@
       <category term="redis" scheme="http://yoursite.com/tags/redis/"/>
     
       <category term="twemproxy" scheme="http://yoursite.com/tags/twemproxy/"/>
+    
+      <category term="redis" scheme="http://yoursite.com/categories/redis/"/>
     
   </entry>
   
