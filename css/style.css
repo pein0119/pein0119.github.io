@@ -773,7 +773,7 @@ pre .javascript .function {
 /* icomoon icon fonts*/
 @font-face {
   font-family: 'icomoon';
-  src: url("../fonts/icomoon.eot?5xv1e3");
+  src: url("../fonts/icomoon.Eot?5xv1e3");
   src: url("../fonts/icomoon.eot?5xv1e3#iefix") format("embedded-opentype"), url("../fonts/icomoon.ttf?5xv1e3") format("truetype"), url("../fonts/icomoon.woff?5xv1e3") format("woff"), url("../fonts/icomoon.svg?5xv1e3#icomoon") format("svg");
   font-weight: normal;
   font-style: normal; }
