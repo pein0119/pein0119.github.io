@@ -4,7 +4,7 @@
   <subtitle><![CDATA[pein0119's blog]]></subtitle>
   <link href="/atom.xml" rel="self"/>
   <link href="http://yoursite.com/"/>
-  <updated>2016-01-23T16:25:39.000Z</updated>
+  <updated>2016-03-21T04:13:34.000Z</updated>
   <id>http://yoursite.com/</id>
   
   <author>
@@ -13,6 +13,35 @@
   </author>
   
   <generator uri="http://hexo.io/">Hexo</generator>
+  
+  <entry>
+    <title><![CDATA[shadowsocks报错'IP 127.0.0.1 is in forbidden list, reject']]></title>
+    <link href="http://yoursite.com/2016/03/21/shadowsocks%E6%8A%A5%E9%94%99-IP-127-0-0-1-is-in-forbidden-list-reject/"/>
+    <id>http://yoursite.com/2016/03/21/shadowsocks报错-IP-127-0-0-1-is-in-forbidden-list-reject/</id>
+    <published>2016-03-21T03:53:26.000Z</published>
+    <updated>2016-03-21T04:13:34.000Z</updated>
+    <content type="html"><![CDATA[<p>最近为了科学上网，买了台vultr的日本vps，每月5美金，1T流量，性价比不错。<br>安装完shadowsocks，配置了端口号，使用下面的命令启动:</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ssserver -c /etc/shadowsocks/config.josn -d start</span></span><br></pre></td></tr></table></figure>
+<p>客户单使用的是shadowsocksX，可以到下面的地址下载：<a href="https://github.com/shadowsocks/shadowsocks-iOS/releases" target="_blank" rel="external">https://github.com/shadowsocks/shadowsocks-iOS/releases</a><br>客户端配置完成之后，发现google还是连不上。<br>查看shadowsocks日志</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># tail -f /var/log/shadowsocks/shadowsocks.log</span></span><br></pre></td></tr></table></figure>
+<p>日志中有如下错误：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ERROR    IP <span class="number">127.0</span>.<span class="number">0.1</span> is <span class="keyword">in</span> forbidden list, reject</span><br></pre></td></tr></table></figure>
+<p>判断应该是防火墙的问题。</p>
+<p>我使用的是centos 7, 使用下面的命令关闭防火墙</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># systemctl stop firewalld.service</span></span><br></pre></td></tr></table></figure>
+<p>禁止开机自启动</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># systemctl disable firewalld.service</span></span><br></pre></td></tr></table></figure>
+]]></content>
+    <summary type="html">
+    <![CDATA[<p>最近为了科学上网，买了台vultr的日本vps，每月5美金，1T流量，性价比不错。<br>安装完shadowsocks，配置了端口号，使用下面的命令启动:</p>
+<figure class="highlight bash"><table><tr><td class="gu]]>
+    </summary>
+    
+      <category term="shadowsocks" scheme="http://yoursite.com/tags/shadowsocks/"/>
+    
+      <category term="shadowsocks" scheme="http://yoursite.com/categories/shadowsocks/"/>
+    
+  </entry>
   
   <entry>
     <title><![CDATA[记一次redis错误排查]]></title>
@@ -746,38 +775,6 @@
       <category term="shell" scheme="http://yoursite.com/tags/shell/"/>
     
       <category term="shell" scheme="http://yoursite.com/categories/shell/"/>
-    
-  </entry>
-  
-  <entry>
-    <title><![CDATA[cookie”域“]]></title>
-    <link href="http://yoursite.com/2014/09/18/cookie%E5%9F%9F/"/>
-    <id>http://yoursite.com/2014/09/18/cookie域/</id>
-    <published>2014-09-18T14:10:29.000Z</published>
-    <updated>2015-01-31T07:07:54.000Z</updated>
-    <content type="html"><![CDATA[<p>当用户浏览网站的时候，网站会将一小段数据发送给用户并存储在用户的浏览器中。用户访问相同网站的时候，浏览器就会将网站在用户中种下的cookie连同用户请求一同发送给客户端。  </p>
-<a id="more"></a>
-<p>在PHP中，可以使用setcookie()函数向客户端发送一个cookie。参数如下：  </p>
-<figure class="highlight fortran"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">name</span> 必需。指定cookie的名称。</span><br><span class="line"><span class="keyword">value</span> 可选。指定cookie的值。</span><br><span class="line">expire 可选。指定cookie的过期时间</span><br><span class="line">path 可选。指定cookie在服务器上可用的路径</span><br><span class="line">domain 可选。指定cookie有效的域</span><br><span class="line">secure 可选。cookie应当只通过HTTPS传输</span><br><span class="line">httponly 可选。当为TRUE时，表明cookie只可以通过HTTP协议访问。</span><br></pre></td></tr></table></figure>
-<p>当浏览器向网站发送请求的时候，它会根据cookie的域来判断携带哪个cookie。</p>
-<p><strong>如果cookie中没有设置domain属性，此时，有效的域就是“发送的请求“中域。</strong></p>
-<ul>
-<li>若<code>domain=.example.com</code>，则该cookie对<code>www.example.com</code>也可用。</li>
-<li>若<code>domain=.example.com</code>，则该cookie对<code>example.com</code>也可用。</li>
-<li>若<code>domain=example.com</code>，会默认转换为<code>domain=.example.com</code>，因此，对<code>www.example.com</code>也可用。</li>
-<li>若<code>domain=example.com</code>,对<code>anotherexample.com</code>不可用，即cookie是不可以跨域的。</li>
-<li><code>www.example.com</code>可以对<code>example.com</code>设置cookie。</li>
-<li><code>www.example.com</code>不可以对<code>www2.example.com</code>设置cookie。</li>
-</ul>
-]]></content>
-    <summary type="html">
-    <![CDATA[<p>当用户浏览网站的时候，网站会将一小段数据发送给用户并存储在用户的浏览器中。用户访问相同网站的时候，浏览器就会将网站在用户中种下的cookie连同用户请求一同发送给客户端。  </p>]]>
-    
-    </summary>
-    
-      <category term="cookie" scheme="http://yoursite.com/tags/cookie/"/>
-    
-      <category term="php" scheme="http://yoursite.com/categories/php/"/>
     
   </entry>
   

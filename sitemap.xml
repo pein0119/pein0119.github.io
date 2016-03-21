@@ -2,6 +2,11 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>http://yoursite.com/2016/03/21/shadowsocks%E6%8A%A5%E9%94%99-IP-127-0-0-1-is-in-forbidden-list-reject/</loc>
+    <lastmod>2016-03-21T04:13:34.000Z</lastmod>
+  </url>
+  
+  <url>
     <loc>http://yoursite.com/2016/01/23/%E8%AE%B0%E4%B8%80%E6%AC%A1twemproxy%E9%94%99%E8%AF%AF%E6%8E%92%E6%9F%A5/</loc>
     <lastmod>2016-01-23T16:25:39.000Z</lastmod>
   </url>
@@ -92,12 +97,12 @@
   </url>
   
   <url>
-    <loc>http://yoursite.com/2014/08/03/hexo%E6%B7%BB%E5%8A%A0-Fork-me-on-GitHub/</loc>
+    <loc>http://yoursite.com/2014/08/26/%E3%80%90%E8%AF%91%E3%80%91php%E4%B8%AD%E7%9A%84'=='%E5%92%8C'==='/</loc>
     <lastmod>2015-01-31T07:07:54.000Z</lastmod>
   </url>
   
   <url>
-    <loc>http://yoursite.com/2014/08/26/%E3%80%90%E8%AF%91%E3%80%91php%E4%B8%AD%E7%9A%84'=='%E5%92%8C'==='/</loc>
+    <loc>http://yoursite.com/2014/08/03/hexo%E4%BD%BF%E7%94%A8github%E4%BD%9C%E4%B8%BA%E5%9B%BE%E7%89%87%E9%93%BE%E6%8E%A5%E6%BA%90/</loc>
     <lastmod>2015-01-31T07:07:54.000Z</lastmod>
   </url>
   
@@ -187,7 +192,7 @@
   </url>
   
   <url>
-    <loc>http://yoursite.com/2014/08/03/hexo%E4%BD%BF%E7%94%A8github%E4%BD%9C%E4%B8%BA%E5%9B%BE%E7%89%87%E9%93%BE%E6%8E%A5%E6%BA%90/</loc>
+    <loc>http://yoursite.com/2014/08/03/hexo%E6%B7%BB%E5%8A%A0-Fork-me-on-GitHub/</loc>
     <lastmod>2015-01-31T07:07:54.000Z</lastmod>
   </url>
   
