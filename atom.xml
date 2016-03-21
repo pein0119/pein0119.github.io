@@ -4,7 +4,7 @@
   <subtitle><![CDATA[pein0119's blog]]></subtitle>
   <link href="/atom.xml" rel="self"/>
   <link href="http://yoursite.com/"/>
-  <updated>2016-03-21T04:13:34.000Z</updated>
+  <updated>2016-03-21T04:14:19.000Z</updated>
   <id>http://yoursite.com/</id>
   
   <author>
@@ -19,8 +19,10 @@
     <link href="http://yoursite.com/2016/03/21/shadowsocks%E6%8A%A5%E9%94%99-IP-127-0-0-1-is-in-forbidden-list-reject/"/>
     <id>http://yoursite.com/2016/03/21/shadowsocks报错-IP-127-0-0-1-is-in-forbidden-list-reject/</id>
     <published>2016-03-21T03:53:26.000Z</published>
-    <updated>2016-03-21T04:13:34.000Z</updated>
-    <content type="html"><![CDATA[<p>最近为了科学上网，买了台vultr的日本vps，每月5美金，1T流量，性价比不错。<br>安装完shadowsocks，配置了端口号，使用下面的命令启动:</p>
+    <updated>2016-03-21T04:14:19.000Z</updated>
+    <content type="html"><![CDATA[<p>最近为了科学上网，买了台vultr的日本vps，每月5美金，1T流量，性价比不错。</p>
+<a id="more"></a>
+<p>安装完shadowsocks，配置了端口号，使用下面的命令启动:</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ssserver -c /etc/shadowsocks/config.josn -d start</span></span><br></pre></td></tr></table></figure>
 <p>客户单使用的是shadowsocksX，可以到下面的地址下载：<a href="https://github.com/shadowsocks/shadowsocks-iOS/releases" target="_blank" rel="external">https://github.com/shadowsocks/shadowsocks-iOS/releases</a><br>客户端配置完成之后，发现google还是连不上。<br>查看shadowsocks日志</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># tail -f /var/log/shadowsocks/shadowsocks.log</span></span><br></pre></td></tr></table></figure>
@@ -33,8 +35,8 @@
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># systemctl disable firewalld.service</span></span><br></pre></td></tr></table></figure>
 ]]></content>
     <summary type="html">
-    <![CDATA[<p>最近为了科学上网，买了台vultr的日本vps，每月5美金，1T流量，性价比不错。<br>安装完shadowsocks，配置了端口号，使用下面的命令启动:</p>
-<figure class="highlight bash"><table><tr><td class="gu]]>
+    <![CDATA[<p>最近为了科学上网，买了台vultr的日本vps，每月5美金，1T流量，性价比不错。</p>]]>
+    
     </summary>
     
       <category term="shadowsocks" scheme="http://yoursite.com/tags/shadowsocks/"/>
